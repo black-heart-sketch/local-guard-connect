@@ -1,12 +1,21 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shield, MapPin, AlertTriangle, Users, Phone, Eye, Lock, MessageCircle, FileText, UserCheck, Clock, BarChart3, Heart, Camera, User, LogOut } from "lucide-react";
+import { MapPin, AlertTriangle, Users, Phone, Eye, Lock, MessageCircle, FileText, UserCheck, Clock, BarChart3, Heart, Camera, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { Link } from "react-router-dom";
+import { Header } from "@/components/layout/Header";
+import { Footer } from "@/components/layout/Footer";
+import { ReportPopup } from "@/components/reports/ReportPopup";
+import { useReportPopup } from "@/hooks/useReportPopup";
 
 const Index = () => {
   const { user, profile, signOut, loading } = useAuth();
+  const {
+    isReportOpen,
+    openReportPopup,
+    closeReportPopup,
+    handleReportSubmit,
+  } = useReportPopup();
 
   if (loading) {
     return (
@@ -70,38 +79,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Shield className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold text-foreground">Local Guard Connect</span>
-          </div>
-          <nav className="hidden md:flex items-center space-x-6">
-            <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
-            <a href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">How It Works</a>
-            <a href="#community" className="text-muted-foreground hover:text-foreground transition-colors">Community</a>
-          </nav>
-          <div className="flex items-center gap-4">
-            {user ? (
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <User className="h-4 w-4" />
-                  <span>Welcome, {profile?.full_name || user.email}</span>
-                </div>
-                <Button variant="ghost" size="sm" onClick={signOut}>
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </Button>
-              </div>
-            ) : (
-              <Link to="/auth">
-                <Button className="bg-primary hover:bg-primary/90">Get Started</Button>
-              </Link>
-            )}
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Hero Section */}
       <section className="relative overflow-hidden">
@@ -120,7 +98,11 @@ const Index = () => {
               Anonymous reporting, real-time alerts, and emergency response - all in your pocket.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg">
+              <Button 
+                size="lg" 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg"
+                onClick={openReportPopup}
+              >
                 <AlertTriangle className="mr-2 h-5 w-5" />
                 Report Now
               </Button>
@@ -324,7 +306,7 @@ const Index = () => {
               <Button size="lg" className="bg-white text-primary hover:bg-white/90">
                 Download App
               </Button>
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
+              <Button size="lg" variant="outline" className="border-white text-white bg-white/10">
                 Learn More
               </Button>
             </div>
@@ -332,20 +314,14 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-card border-t py-12">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="flex items-center space-x-2 mb-4 md:mb-0">
-              <Shield className="h-6 w-6 text-primary" />
-              <span className="text-xl font-bold text-foreground">Local Guard Connect</span>
-            </div>
-            <p className="text-muted-foreground text-center md:text-right">
-              © 2024 Local Guard Connect. Building safer communities through technology.
-            </p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
+      
+      {/* Report Popup */}
+      <ReportPopup
+        isOpen={isReportOpen}
+        onClose={closeReportPopup}
+        onSubmit={handleReportSubmit}
+      />
     </div>
   );
 };
