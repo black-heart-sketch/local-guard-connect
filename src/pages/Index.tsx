@@ -1,9 +1,23 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shield, MapPin, AlertTriangle, Users, Phone, Eye, Lock, MessageCircle, FileText, UserCheck, Clock, BarChart3, Heart, Camera } from "lucide-react";
+import { Shield, MapPin, AlertTriangle, Users, Phone, Eye, Lock, MessageCircle, FileText, UserCheck, Clock, BarChart3, Heart, Camera, User, LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Link } from "react-router-dom";
 
 const Index = () => {
+  const { user, profile, signOut, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
   const features = [
     {
       icon: FileText,
@@ -68,7 +82,24 @@ const Index = () => {
             <a href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">How It Works</a>
             <a href="#community" className="text-muted-foreground hover:text-foreground transition-colors">Community</a>
           </nav>
-          <Button className="bg-primary hover:bg-primary/90">Get Started</Button>
+          <div className="flex items-center gap-4">
+            {user ? (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <User className="h-4 w-4" />
+                  <span>Welcome, {profile?.full_name || user.email}</span>
+                </div>
+                <Button variant="ghost" size="sm" onClick={signOut}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </div>
+            ) : (
+              <Link to="/auth">
+                <Button className="bg-primary hover:bg-primary/90">Get Started</Button>
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 
