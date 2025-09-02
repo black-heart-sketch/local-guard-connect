@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
+import { Database } from '@/types/supabase';
+
 export interface Profile {
   id: string;
   user_id: string;
@@ -9,7 +11,7 @@ export interface Profile {
   avatar_url: string | null;
   phone: string | null;
   location: string | null;
-  role: string;
+  role: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -101,12 +103,12 @@ export function useAuth() {
     if (!user) return { error: 'No user logged in' };
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = (await (supabase as any)
         .from('profiles')
         .update(updates)
         .eq('user_id', user.id)
         .select()
-        .single();
+        .single());
 
       if (error) throw error;
 

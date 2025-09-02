@@ -1,0 +1,355 @@
+import { useState, useEffect } from 'react';
+import { Database } from '@/types/supabase';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { Search, FileText, Clock, CheckCircle, XCircle, MapPin, Calendar, Filter } from 'lucide-react';
+
+interface Report {
+  id: string;
+  crime_type: string;
+  location: string;
+  status: string;
+  created_at: string;
+  description: string;
+  user_email: string | null;
+  is_anonymous: boolean;
+}
+
+export function AdminDashboard() {
+  const { profile } = useAuth();
+  const { toast } = useToast();
+  const [reports, setReports] = useState<Report[]>([]);
+  const [filteredReports, setFilteredReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [crimeTypeFilter, setCrimeTypeFilter] = useState('all');
+
+  useEffect(() => {
+    fetchAllReports();
+  }, []);
+
+  useEffect(() => {
+    filterReports();
+  }, [reports, searchTerm, statusFilter, crimeTypeFilter]);
+
+  const fetchAllReports = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setReports(data || []);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch reports',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filterReports = () => {
+    let filtered = [...reports];
+
+    if (searchTerm) {
+      filtered = filtered.filter(report =>
+        report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        report.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        report.crime_type.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(report => report.status === statusFilter);
+    }
+
+    if (crimeTypeFilter !== 'all') {
+      filtered = filtered.filter(report => report.crime_type === crimeTypeFilter);
+    }
+
+    setFilteredReports(filtered);
+  };
+
+  const updateReportStatus = async (reportId: string, newStatus: string) => {
+    try {
+      const { error } = (await (supabase as any)
+        .from('reports')
+        .update({ 
+          status: newStatus as 'pending' | 'in_progress' | 'resolved' | 'rejected',
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', reportId));
+
+      if (error) throw error;
+
+      setReports(reports.map(report =>
+        report.id === reportId ? { ...report, status: newStatus } : report
+      ));
+
+      toast({
+        title: 'Success',
+        description: `Report status updated to ${newStatus}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update report status',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'resolved':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'rejected':
+        return 'bg-red-100 text-red-800 border-red-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const getUniqueValues = (field: keyof Report) => {
+    return [...new Set(reports.map(report => String(report[field])))].filter(Boolean);
+  };
+
+  const stats = {
+    total: reports.length,
+    pending: reports.filter(r => r.status === 'pending').length,
+    inProgress: reports.filter(r => r.status === 'in_progress').length,
+    resolved: reports.filter(r => r.status === 'resolved').length,
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="bg-card border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">
+                Admin Dashboard
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Manage and review crime reports
+              </p>
+            </div>
+            <Badge variant="secondary" className="text-sm">
+              {profile?.role?.toUpperCase()}
+            </Badge>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.total}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">{stats.inProgress}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Resolved</CardTitle>
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{stats.resolved}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="w-5 h-5" />
+              Filters
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search reports..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={crimeTypeFilter} onValueChange={setCrimeTypeFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by crime type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Crime Types</SelectItem>
+                  {getUniqueValues('crime_type').map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="text-sm text-muted-foreground flex items-center">
+                Showing {filteredReports.length} of {reports.length} reports
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Reports List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Crime Reports</CardTitle>
+            <CardDescription>
+              Review and manage submitted crime reports
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : filteredReports.length === 0 ? (
+              <div className="text-center py-8">
+                <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">No reports found</h3>
+                <p className="text-muted-foreground">
+                  {searchTerm || statusFilter !== 'all' || crimeTypeFilter !== 'all'
+                    ? 'Try adjusting your filters'
+                    : 'No reports have been submitted yet'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredReports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="border border-border rounded-lg p-6 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="font-semibold text-foreground text-lg">
+                            {report.crime_type}
+                          </h3>
+                          <Badge className={getStatusColor(report.status)}>
+                            {report.status.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center text-sm text-muted-foreground mb-2">
+                          <MapPin className="w-4 h-4 mr-1" />
+                          {report.location}
+                        </div>
+                        <div className="flex items-center text-sm text-muted-foreground">
+                          <Calendar className="w-4 h-4 mr-1" />
+                          {formatDate(report.created_at)}
+                          {report.is_anonymous && (
+                            <Badge variant="outline" className="ml-2">
+                              Anonymous
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Select
+                          value={report.status}
+                          onValueChange={(value) => updateReportStatus(report.id, value)}
+                        >
+                          <SelectTrigger className="w-40">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="in_progress">In Progress</SelectItem>
+                            <SelectItem value="resolved">Resolved</SelectItem>
+                            <SelectItem value="rejected">Rejected</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {report.description}
+                    </p>
+                    {!report.is_anonymous && report.user_email && (
+                      <div className="text-xs text-muted-foreground">
+                        Contact: {report.user_email}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </main>
+    </div>
+  );
+}
