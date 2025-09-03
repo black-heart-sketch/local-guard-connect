@@ -50,12 +50,60 @@ export type Database = {
         }
         Relationships: []
       }
+      reports: {
+        Row: {
+          attachments: Json | null
+          coordinates: Json | null
+          created_at: string | null
+          crime_type: string
+          description: string
+          id: string
+          is_anonymous: boolean
+          location: string
+          status: string | null
+          updated_at: string | null
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          attachments?: Json | null
+          coordinates?: Json | null
+          created_at?: string | null
+          crime_type: string
+          description: string
+          id?: string
+          is_anonymous?: boolean
+          location: string
+          status?: string | null
+          updated_at?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          attachments?: Json | null
+          coordinates?: Json | null
+          created_at?: string | null
+          crime_type?: string
+          description?: string
+          id?: string
+          is_anonymous?: boolean
+          location?: string
+          status?: string | null
+          updated_at?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      send_emergency_video: {
+        Args: { location_data?: Json; user_id: string; video_data: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

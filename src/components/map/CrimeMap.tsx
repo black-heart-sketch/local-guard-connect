@@ -285,7 +285,7 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
 
     // Fit map to show all markers
     if (validReports.length > 0) {
-      const group = new L.featureGroup(markersRef.current.getLayers());
+      const group = L.featureGroup(markersRef.current.getLayers());
       map.current.fitBounds(group.getBounds().pad(0.1));
     }
   };
