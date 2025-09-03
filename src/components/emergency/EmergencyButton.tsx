@@ -19,28 +19,104 @@ const EmergencyButton = () => {
   const [locationStatus, setLocationStatus] = useState<string>('');
   const [emergencyContacted, setEmergencyContacted] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
+  const [chunkCount, setChunkCount] = useState(0);
+  const [totalUploadSize, setTotalUploadSize] = useState(0);
+  const [lastChunkTime, setLastChunkTime] = useState<number | null>(null);
+  
   const chunks = useRef<Blob[]>([]);
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
   const uploadInterval = useRef<NodeJS.Timeout | null>(null);
   const currentLocation = useRef<GeolocationPosition | null>(null);
+  const sessionStartTime = useRef<number | null>(null);
+  const [savedChunks, setSavedChunks] = useState<Blob[]>([]);
 
-  // Send video chunk to server
-  const sendVideoChunk = async (videoBlob: Blob) => {
+  const downloadRecording = () => {
+    if (savedChunks.length === 0) return;
+  
+    const blob = new Blob(savedChunks, { type: "video/webm" });
+    const url = URL.createObjectURL(blob);
+  
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `emergency-recording-${new Date().toISOString()}.webm`;
+    a.click();
+  
+    URL.revokeObjectURL(url);
+  };
+  
+  // Enhanced logging function
+  const logEvent = (event: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    const sessionTime = sessionStartTime.current ? Date.now() - sessionStartTime.current : 0;
+    console.log(`[EMERGENCY] ${timestamp} (+${sessionTime}ms) ${event}:`, data || '');
+  };
+
+  // Send video chunk to server with enhanced error handling and logging
+  const sendVideoChunk = async (videoBlob: Blob, chunkIndex: number) => {
     if (!user) {
-      console.error('No user authenticated');
+      logEvent('ERROR: No user authenticated for chunk upload');
+      handleRecordingError('User not authenticated');
       return;
     }
 
-    try {
-      // Convert blob to base64
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64data = reader.result as string;
-        const base64Video = base64data.split(',')[1]; // Remove data:video/webm;base64, prefix
+    const chunkStartTime = Date.now();
+    logEvent('CHUNK_UPLOAD_START', {
+      chunkIndex,
+      blobSize: videoBlob.size,
+      blobType: videoBlob.type,
+      userId: user.id
+    });
 
-        const { data, error } = await supabase.functions.invoke('video-stream', {
-          body: {
-            videoChunk: base64Video,
+    try {
+      // Convert blob to base64 with validation
+      const reader = new FileReader();
+      
+      reader.onloadend = async () => {
+        try {
+          const readerResult = reader.result as string;
+          logEvent('CHUNK_READ_COMPLETE', {
+            chunkIndex,
+            resultType: typeof readerResult,
+            resultLength: readerResult?.length || 0,
+            hasComma: readerResult?.includes(',') || false
+          });
+
+          if (!readerResult || typeof readerResult !== 'string') {
+            throw new Error('FileReader result is invalid');
+          }
+
+          // Validate base64 format
+          if (!readerResult.startsWith('data:')) {
+            throw new Error('FileReader result is not a data URL');
+          }
+          const base64Video = readerResult.split(',')[1];
+
+          if (!base64Video || base64Video.length === 0) {
+            throw new Error('Base64 data is empty after splitting');
+          }
+          
+          // Clean up the base64 string
+          const cleanedBase64 = base64Video.replace(/\s/g, '');
+          
+          // Test base64 validity
+          try {
+            const testDecode = atob(cleanedBase64.substring(0, 100)); // Test first 100 chars
+            logEvent('BASE64_VALIDATION_SUCCESS', {
+              chunkIndex,
+              base64Length: cleanedBase64.length,
+              testDecodeLength: testDecode.length
+            });
+          } catch (b64Error) {
+            throw new Error(`Invalid base64 data: ${b64Error.message}`);
+          }
+          
+          // Prepare payload
+          const payload = {
+            videoChunk: cleanedBase64, // ✅ now defined
+            chunkIndex,
+            chunkSize: videoBlob.size,
+            userId: user.id,
+            timestamp: new Date().toISOString(),
             location: currentLocation.current ? {
               latitude: currentLocation.current.coords.latitude,
               longitude: currentLocation.current.coords.longitude,
@@ -48,30 +124,108 @@ const EmergencyButton = () => {
               timestamp: currentLocation.current.timestamp
             } : null,
             emergencyType: 'panic_button'
-          }
-        });
+          };
+          
 
-        if (error) {
-          console.error('Failed to send video chunk:', error);
-          setUploadStatus('Upload failed');
-        } else {
-          console.log('Video chunk sent successfully:', data);
-          setUploadStatus(`Chunk uploaded: ${(videoBlob.size / 1024).toFixed(1)}KB`);
+          logEvent('CHUNK_UPLOAD_PAYLOAD_READY', {
+            chunkIndex,
+            payloadKeys: Object.keys(payload),
+            base64VideoLength: cleanedBase64.length, // Use cleaned length
+            hasLocation: !!payload.location
+          });
+
+          // Send to Supabase function
+          const uploadStartTime = Date.now();
+          const { data, error } = await supabase.functions.invoke('video-stream', {
+            body: payload
+          });
+
+          const uploadDuration = Date.now() - uploadStartTime;
+
+          if (error) {
+            logEvent('CHUNK_UPLOAD_ERROR', {
+              chunkIndex,
+              error: error.message,
+              errorDetails: error,
+              uploadDuration
+            });
+            throw error;
+          } else {
+            logEvent('CHUNK_UPLOAD_SUCCESS', {
+              chunkIndex,
+              response: data,
+              uploadDuration,
+              totalDuration: Date.now() - chunkStartTime
+            });
+            
+            // Update UI state
+            setChunkCount(prev => prev + 1);
+            setTotalUploadSize(prev => prev + videoBlob.size);
+            setLastChunkTime(Date.now());
+            setUploadStatus(`Chunk ${chunkIndex}: ${(videoBlob.size / 1024).toFixed(1)}KB uploaded`);
+          }
+        } catch (processError) {
+          logEvent('CHUNK_PROCESSING_ERROR', {
+            chunkIndex,
+            error: processError.message,
+            stack: processError.stack
+          });
+          handleRecordingError(`Chunk ${chunkIndex} failed: ${processError.message}`);
         }
       };
+
+      reader.onerror = (readerError) => {
+        logEvent('FILEREADER_ERROR', {
+          chunkIndex,
+          error: readerError,
+          readerState: reader.readyState
+        });
+        handleRecordingError(`Failed to read chunk ${chunkIndex}`);
+      };
+
+      reader.onloadstart = () => {
+        logEvent('FILEREADER_START', { chunkIndex });
+      };
+
       reader.readAsDataURL(videoBlob);
+
     } catch (error) {
-      console.error('Error sending video chunk:', error);
-      setUploadStatus('Upload error');
+      logEvent('CHUNK_UPLOAD_EXCEPTION', {
+        chunkIndex,
+        error: error.message,
+        stack: error.stack
+      });
+      handleRecordingError(`Chunk upload failed: ${error.message}`);
     }
+  };
+
+  // Handle recording errors by stopping recording
+  const handleRecordingError = (errorMessage: string) => {
+    logEvent('RECORDING_ERROR_HANDLER', { errorMessage, isRecording });
+    
+    setError(errorMessage);
+    
+    if (isRecording) {
+      logEvent('STOPPING_RECORDING_DUE_TO_ERROR');
+      stopRecording();
+    }
+
+    toast({
+      title: "Emergency Recording Error",
+      description: errorMessage,
+      variant: "destructive",
+      duration: 5000,
+    });
   };
 
   // Enhanced location sharing with better error handling
   const shareLocation = async () => {
+    logEvent('LOCATION_SHARING_START');
     setLocationStatus('Getting location...');
     
     if (!navigator.geolocation) {
-      setLocationStatus('Using IP-based location');
+      logEvent('GEOLOCATION_NOT_SUPPORTED');
+      setLocationStatus('Geolocation not supported');
       setTimeout(() => setLocationSent(true), 1000);
       return;
     }
@@ -82,20 +236,26 @@ const EmergencyButton = () => {
       maximumAge: 300000
     };
 
+    logEvent('GEOLOCATION_REQUEST_START', options);
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
         currentLocation.current = position;
-        console.log('Location obtained successfully:', {
+        logEvent('LOCATION_SUCCESS', {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy
+          accuracy: position.coords.accuracy,
+          timestamp: position.timestamp
         });
         setLocationStatus('GPS location obtained');
         setLocationSent(true);
       },
-      (error) => {
-        console.warn('GPS location failed:', error.message);
-        setLocationStatus('Using network location');
+      (geoError) => {
+        logEvent('LOCATION_ERROR', {
+          code: geoError.code,
+          message: geoError.message
+        });
+        setLocationStatus(`Location error: ${geoError.message}`);
         setTimeout(() => setLocationSent(true), 1000);
       },
       options
@@ -103,16 +263,30 @@ const EmergencyButton = () => {
   };
 
   const startRecording = async () => {
+    sessionStartTime.current = Date.now();
+    logEvent('RECORDING_START_REQUESTED', { userId: user?.id });
+    
+
     if (!user) {
-      setError('Please log in to use emergency features');
+      const errorMsg = 'Please log in to use emergency features';
+      logEvent('RECORDING_START_FAILED_NO_USER');
+      setError(errorMsg);
       return;
     }
 
     try {
+      // Reset state
+      setError(null);
+      setChunkCount(0);
+      setTotalUploadSize(0);
+      setLastChunkTime(null);
+
+      logEvent('COUNTDOWN_START');
       setCountdown(3);
       
       // Enhanced countdown with vibration and audio cues
       for (let i = 3; i > 0; i--) {
+        logEvent('COUNTDOWN_TICK', { remaining: i });
         if (navigator.vibrate) {
           navigator.vibrate(200);
         }
@@ -120,10 +294,13 @@ const EmergencyButton = () => {
         setCountdown(i - 1);
       }
       
+      logEvent('COUNTDOWN_COMPLETE');
+      
       // Share location and notify emergency contacts
       shareLocation();
       setEmergencyContacted(true);
       
+      logEvent('REQUESTING_MEDIA_DEVICES');
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           width: { ideal: 1280 },
@@ -137,26 +314,88 @@ const EmergencyButton = () => {
         }
       });
       
+      logEvent('MEDIA_STREAM_OBTAINED', {
+        videoTracks: mediaStream.getVideoTracks().length,
+        audioTracks: mediaStream.getAudioTracks().length,
+        streamId: mediaStream.id
+      });
+      
       setStream(mediaStream);
       
+      // Check MediaRecorder support
+      const mimeType = 'video/webm;codecs=vp9';
+      const isSupported = MediaRecorder.isTypeSupported(mimeType);
+      
+      logEvent('MEDIARECORDER_SETUP', {
+        mimeTypeSupported: isSupported,
+        mimeType: mimeType
+      });
+
       const recorder = new MediaRecorder(mediaStream, {
-        mimeType: 'video/webm;codecs=vp9',
+        mimeType: isSupported ? mimeType : 'video/webm',
         videoBitsPerSecond: 1000000 // 1 Mbps
       });
       
       setMediaRecorder(recorder);
       chunks.current = [];
+      let chunkIndex = 0;
       
       // Handle data available - send chunks to server in real-time
       recorder.ondataavailable = (e) => {
+        const chunkTime = Date.now();
+        if (e.data.size > 0) {
+            chunks.current.push(e.data);
+            setSavedChunks(prev => [...prev, e.data]); // ✅ keep locally
+            sendVideoChunk(e.data, chunkIndex++);
+          }
+          
+        const timeSinceStart = sessionStartTime.current ? chunkTime - sessionStartTime.current : 0;
+        
+        logEvent('CHUNK_AVAILABLE', {
+          chunkIndex,
+          dataSize: e.data.size,
+          timeSinceStart,
+          timeSinceLastChunk: lastChunkTime ? chunkTime - lastChunkTime : 0
+        });
+
         if (e.data.size > 0) {
           chunks.current.push(e.data);
           // Send chunk to server immediately
-          sendVideoChunk(e.data);
+          sendVideoChunk(e.data, chunkIndex++);
+        } else {
+          logEvent('EMPTY_CHUNK_RECEIVED', { chunkIndex });
         }
+      };
+      logEvent('STARTING_MEDIARECORDER', { timeslice: 2000 });
+      recorder.start(2000);
+      setIsRecording(true);
+      setCountdown(null);
+
+      // ⏱️ Auto-download after 5 seconds
+      setTimeout(() => {
+        logEvent('AUTO_DOWNLOAD_TRIGGER');
+        downloadRecording();
+      }, 5000);
+
+
+      recorder.onstart = () => {
+        logEvent('MEDIARECORDER_STARTED');
+      };
+
+      recorder.onstop = () => {
+        logEvent('MEDIARECORDER_STOPPED', {
+          totalChunks: chunks.current.length,
+          totalSize: chunks.current.reduce((sum, chunk) => sum + chunk.size, 0)
+        });
+      };
+
+      recorder.onerror = (event) => {
+        logEvent('MEDIARECORDER_ERROR', { error: event });
+        handleRecordingError('MediaRecorder error occurred');
       };
       
       // Start recording and send chunks every 2 seconds
+      logEvent('STARTING_MEDIARECORDER', { timeslice: 2000 });
       recorder.start(2000);
       setIsRecording(true);
       setCountdown(null);
@@ -168,36 +407,57 @@ const EmergencyButton = () => {
         duration: 3000,
       });
       
+      logEvent('RECORDING_STARTED_SUCCESSFULLY');
+      
       // Start duration timer
       durationInterval.current = setInterval(() => {
         setRecordingDuration(prev => prev + 1);
       }, 1000);
       
     } catch (err) {
-      console.error('Error accessing media devices:', err);
-      setError('Could not access camera/microphone. Please check permissions.');
-      setCountdown(null);
-      toast({
-        title: "Emergency Recording Failed",
-        description: "Could not access camera/microphone",
-        variant: "destructive",
+      logEvent('RECORDING_START_ERROR', {
+        error: err.message,
+        stack: err.stack,
+        name: err.name
       });
+      
+      const errorMessage = err.name === 'NotAllowedError' 
+        ? 'Camera/microphone permission denied. Please allow access and try again.'
+        : err.name === 'NotFoundError'
+        ? 'No camera/microphone found. Please connect a device and try again.'
+        : `Could not access camera/microphone: ${err.message}`;
+      
+      handleRecordingError(errorMessage);
+      setCountdown(null);
     }
   };
   
   const stopRecording = () => {
-    console.log('Stop recording called', { mediaRecorder, stream });
+    logEvent('STOP_RECORDING_CALLED', {
+      mediaRecorderState: mediaRecorder?.state,
+      hasStream: !!stream,
+      recordingDuration
+    });
     
     // Stop the media recorder
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      logEvent('STOPPING_MEDIARECORDER');
       mediaRecorder.stop();
     }
     
     // Stop all tracks to release camera/microphone
     if (stream) {
+      const videoTracks = stream.getVideoTracks();
+      const audioTracks = stream.getAudioTracks();
+      
+      logEvent('STOPPING_MEDIA_TRACKS', {
+        videoTracks: videoTracks.length,
+        audioTracks: audioTracks.length
+      });
+
       stream.getTracks().forEach(track => {
         track.stop();
-        console.log('Stopped track:', track.kind, track.label);
+        logEvent('TRACK_STOPPED', { kind: track.kind, label: track.label });
       });
       setStream(null);
     }
@@ -221,16 +481,24 @@ const EmergencyButton = () => {
     setLocationStatus('');
     setEmergencyContacted(false);
     setUploadStatus('');
+    setChunkCount(0);
+    setTotalUploadSize(0);
+    setLastChunkTime(null);
     currentLocation.current = null;
+    sessionStartTime.current = null;
     
     // Show completion message
     toast({
       title: "Emergency Recording Stopped",
-      description: "Recording has been sent to emergency services",
+      description: `Recording completed: ${chunkCount} chunks uploaded`,
       duration: 5000,
     });
     
-    console.log('Emergency recording session ended');
+    logEvent('RECORDING_SESSION_ENDED', {
+      totalChunks: chunkCount,
+      totalSize: totalUploadSize,
+      duration: recordingDuration
+    });
   };
 
   const formatDuration = (seconds: number) => {
@@ -238,9 +506,18 @@ const EmergencyButton = () => {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
   
   useEffect(() => {
     return () => {
+      logEvent('COMPONENT_CLEANUP');
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
       }
@@ -343,6 +620,13 @@ const EmergencyButton = () => {
                   <div className="ml-auto w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 </div>
               )}
+              {/* Upload Statistics */}
+              {chunkCount > 0 && (
+                <div className="flex items-center text-purple-600 text-xs">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
+                  <span>Chunks: {chunkCount} | Size: {formatBytes(totalUploadSize)}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -367,15 +651,12 @@ const EmergencyButton = () => {
             >
               <Square className="h-8 w-8 fill-current" />
               <span className="text-xs font-bold mt-1">STOP</span>
-
-              
             </Button>
             
             {/* Pulsing Border */}
             <div className="absolute inset-0 rounded-full border-4 border-red-300 animate-pulse"></div>
           </div>
         ) : (
-
           /* Emergency Activation Button */
           <div className="relative">
             <Button
@@ -453,7 +734,7 @@ const EmergencyButton = () => {
       </div>
 
       {/* CSS Animations */}
-      <style >{`
+      <style>{`
         @keyframes slide-up {
           from {
             transform: translateY(20px);
