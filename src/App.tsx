@@ -1,3 +1,15 @@
+// App.tsx
+
+// 🔍 Debugging: Patch console.error to trace Context warnings
+console.error = ((error) => {
+  return (...args: any[]) => {
+    if (typeof args[0] === "string" && args[0].includes("Rendering <Context> directly")) {
+      console.trace("⚠️ Context Warning Trace:");
+    }
+    error(...args);
+  };
+})(console.error);
+
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TooltipProvider } from '@/components/ui/tooltip';

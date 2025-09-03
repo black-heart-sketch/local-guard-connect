@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Search, FileText, Clock, CheckCircle, XCircle, MapPin, Calendar, Filter } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Search, FileText, Clock, CheckCircle, XCircle, MapPin, Calendar, Filter, Eye, Download, X, User, Mail, MessageSquare, Image, File, ExternalLink, Map } from 'lucide-react';
 
 interface Report {
   id: string;
@@ -19,6 +20,17 @@ interface Report {
   description: string;
   user_email: string | null;
   is_anonymous: boolean;
+  coordinates: any;
+  attachments: any;
+  updated_at: string | null;
+}
+
+interface FileAttachment {
+  url: string;
+  name: string;
+  type: string;
+  size: number;
+  path?: string;
 }
 
 export function AdminDashboard() {
@@ -26,10 +38,13 @@ export function AdminDashboard() {
   const { toast } = useToast();
   const [reports, setReports] = useState<Report[]>([]);
   const [filteredReports, setFilteredReports] = useState<Report[]>([]);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [crimeTypeFilter, setCrimeTypeFilter] = useState('all');
+  const [isMapOpen, setIsMapOpen] = useState(false);
 
   useEffect(() => {
     fetchAllReports();
@@ -83,19 +98,24 @@ export function AdminDashboard() {
 
   const updateReportStatus = async (reportId: string, newStatus: string) => {
     try {
-      const { error } = (await (supabase as any)
+      const { error } = await (supabase as any)
         .from('reports')
         .update({ 
           status: newStatus as 'pending' | 'in_progress' | 'resolved' | 'rejected',
           updated_at: new Date().toISOString() 
         })
-        .eq('id', reportId));
+        .eq('id', reportId);
 
       if (error) throw error;
 
       setReports(reports.map(report =>
         report.id === reportId ? { ...report, status: newStatus } : report
       ));
+
+      // Update selected report if it's the one being modified
+      if (selectedReport && selectedReport.id === reportId) {
+        setSelectedReport({ ...selectedReport, status: newStatus });
+      }
 
       toast({
         title: 'Success',
@@ -108,6 +128,16 @@ export function AdminDashboard() {
         variant: 'destructive',
       });
     }
+  };
+
+  const openReportDetails = (report: Report) => {
+    setSelectedReport(report);
+    setIsDetailModalOpen(true);
+  };
+
+  const closeReportDetails = () => {
+    setSelectedReport(null);
+    setIsDetailModalOpen(false);
   };
 
   const getStatusColor = (status: string) => {
@@ -137,6 +167,19 @@ export function AdminDashboard() {
 
   const getUniqueValues = (field: keyof Report) => {
     return [...new Set(reports.map(report => String(report[field])))].filter(Boolean);
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getFileIcon = (fileType: string) => {
+    if (fileType.startsWith('image/')) return <Image className="w-4 h-4" />;
+    return <File className="w-4 h-4" />;
   };
 
   const stats = {
@@ -169,7 +212,7 @@ export function AdminDashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
               <FileText className="h-4 w-4 text-muted-foreground" />
@@ -179,7 +222,7 @@ export function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Pending</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
@@ -189,7 +232,7 @@ export function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">In Progress</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
@@ -199,7 +242,7 @@ export function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Resolved</CardTitle>
               <CheckCircle className="h-4 w-4 text-muted-foreground" />
@@ -212,11 +255,20 @@ export function AdminDashboard() {
 
         {/* Filters */}
         <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
               <Filter className="w-5 h-5" />
-              Filters
-            </CardTitle>
+              <CardTitle>Filters</CardTitle>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2"
+              onClick={() => setIsMapOpen(true)}
+            >
+              <Map className="w-4 h-4" />
+              View on Map
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -269,7 +321,7 @@ export function AdminDashboard() {
           <CardHeader>
             <CardTitle>Crime Reports</CardTitle>
             <CardDescription>
-              Review and manage submitted crime reports
+              Click on any report to view detailed information and attachments
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -292,17 +344,23 @@ export function AdminDashboard() {
                 {filteredReports.map((report) => (
                   <div
                     key={report.id}
-                    className="border border-border rounded-lg p-6 hover:bg-muted/50 transition-colors"
+                    className="border border-border rounded-lg p-6 hover:bg-muted/50 hover:shadow-md transition-all cursor-pointer group"
+                    onClick={() => openReportDetails(report)}
                   >
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-semibold text-foreground text-lg">
+                          <h3 className="font-semibold text-foreground text-lg group-hover:text-primary transition-colors">
                             {report.crime_type}
                           </h3>
                           <Badge className={getStatusColor(report.status)}>
                             {report.status.replace('_', ' ')}
                           </Badge>
+                          {Array.isArray(report.attachments) && report.attachments.length > 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              {report.attachments.length} file{report.attachments.length > 1 ? 's' : ''}
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center text-sm text-muted-foreground mb-2">
                           <MapPin className="w-4 h-4 mr-1" />
@@ -318,12 +376,26 @@ export function AdminDashboard() {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openReportDetails(report);
+                          }}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
                         <Select
                           value={report.status}
                           onValueChange={(value) => updateReportStatus(report.id, value)}
                         >
-                          <SelectTrigger className="w-40">
+                          <SelectTrigger 
+                            className="w-40"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -335,7 +407,7 @@ export function AdminDashboard() {
                         </Select>
                       </div>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-4">
+                    <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
                       {report.description}
                     </p>
                     {!report.is_anonymous && report.user_email && (
@@ -350,6 +422,246 @@ export function AdminDashboard() {
           </CardContent>
         </Card>
       </main>
+
+    
+
+      {/* Report Details Modal */}
+      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <DialogTitle className="text-xl">
+                  Report Details
+                </DialogTitle>
+                <Badge className={getStatusColor(selectedReport?.status || '')}>
+                  {selectedReport?.status?.replace('_', ' ')}
+                </Badge>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={closeReportDetails}
+                className="h-6 w-6 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <DialogDescription>
+              Review complete report information and manage status
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-6">
+            {selectedReport && (
+              <>
+                {/* Basic Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <FileText className="w-5 h-5" />
+                        Report Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Crime Type</label>
+                        <p className="text-sm font-semibold mt-1">{selectedReport.crime_type}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Location</label>
+                        <p className="text-sm mt-1 flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {selectedReport.location}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Submitted</label>
+                        <p className="text-sm mt-1 flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {formatDate(selectedReport.created_at)}
+                        </p>
+                      </div>
+                      {selectedReport.updated_at && (
+                        <div>
+                          <label className="text-sm font-medium text-muted-foreground">Last Updated</label>
+                          <p className="text-sm mt-1">{formatDate(selectedReport.updated_at)}</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <User className="w-5 h-5" />
+                        Submitter Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Submission Type</label>
+                        <p className="text-sm mt-1">
+                          {selectedReport.is_anonymous ? (
+                            <Badge variant="outline">Anonymous</Badge>
+                          ) : (
+                            <Badge variant="default">Identified</Badge>
+                          )}
+                        </p>
+                      </div>
+                      {!selectedReport.is_anonymous && selectedReport.user_email && (
+                        <div>
+                          <label className="text-sm font-medium text-muted-foreground">Email</label>
+                          <p className="text-sm mt-1 flex items-center gap-1">
+                            <Mail className="w-3 h-3" />
+                            {selectedReport.user_email}
+                          </p>
+                        </div>
+                      )}
+                      {selectedReport.coordinates && (
+                        <div>
+                          <label className="text-sm font-medium text-muted-foreground">Coordinates</label>
+                          <p className="text-sm mt-1">
+                            Lat: {selectedReport.coordinates.latitude?.toFixed(6)}, 
+                            Lng: {selectedReport.coordinates.longitude?.toFixed(6)}
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Description */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5" />
+                      Description
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {selectedReport.description}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Attachments */}
+                {Array.isArray(selectedReport.attachments) && selectedReport.attachments.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <File className="w-5 h-5" />
+                        Attachments ({selectedReport.attachments.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {selectedReport.attachments.map((file: FileAttachment, index: number) => (
+                          <div
+                            key={index}
+                            className="border border-border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="flex-shrink-0 mt-1">
+                                {getFileIcon(file.type)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate" title={file.name}>
+                                  {file.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatFileSize(file.size)}
+                                </p>
+                                <div className="flex gap-2 mt-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() => window.open(file.url, '_blank')}
+                                  >
+                                    <ExternalLink className="w-3 h-3 mr-1" />
+                                    View
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = file.url;
+                                      link.download = file.name;
+                                      document.body.appendChild(link);
+                                      link.click();
+                                      document.body.removeChild(link);
+                                    }}
+                                  >
+                                    <Download className="w-3 h-3 mr-1" />
+                                    Download
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Status Management */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Status Management</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <label className="text-sm font-medium text-muted-foreground">Update Status</label>
+                        <Select
+                          value={selectedReport.status}
+                          onValueChange={(value) => updateReportStatus(selectedReport.id, value)}
+                        >
+                          <SelectTrigger className="w-full mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-yellow-600" />
+                                Pending
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="in_progress">
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-blue-600" />
+                                In Progress
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="resolved">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle className="w-4 h-4 text-green-600" />
+                                Resolved
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="rejected">
+                              <div className="flex items-center gap-2">
+                                <XCircle className="w-4 h-4 text-red-600" />
+                                Rejected
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
