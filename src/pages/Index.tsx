@@ -106,7 +106,12 @@ const Index = () => {
                 <AlertTriangle className="mr-2 h-5 w-5" />
                 Report Now
               </Button>
-              <Button size="lg" variant="outline" className="border-primary text-primary hover:bg-primary/5">
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="border-primary text-primary hover:bg-primary/5"
+                onClick={() => window.location.href = '/map'}
+              >
                 <MapPin className="mr-2 h-5 w-5" />
                 View Crime Map
               </Button>

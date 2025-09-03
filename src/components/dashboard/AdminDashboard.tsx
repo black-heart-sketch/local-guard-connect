@@ -264,7 +264,7 @@ export function AdminDashboard() {
               variant="outline" 
               size="sm" 
               className="gap-2"
-              onClick={() => setIsMapOpen(true)}
+              onClick={() => window.location.href = '/map'}
             >
               <Map className="w-4 h-4" />
               View on Map
