@@ -1,8 +1,13 @@
 import { AlertTriangle, AlertCircle, Video, Mic, Square, MapPin, Phone, Users, Shield, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 const EmergencyButton = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
@@ -13,8 +18,53 @@ const EmergencyButton = () => {
   const [locationSent, setLocationSent] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string>('');
   const [emergencyContacted, setEmergencyContacted] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string>('');
   const chunks = useRef<Blob[]>([]);
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
+  const uploadInterval = useRef<NodeJS.Timeout | null>(null);
+  const currentLocation = useRef<GeolocationPosition | null>(null);
+
+  // Send video chunk to server
+  const sendVideoChunk = async (videoBlob: Blob) => {
+    if (!user) {
+      console.error('No user authenticated');
+      return;
+    }
+
+    try {
+      // Convert blob to base64
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        const base64Video = base64data.split(',')[1]; // Remove data:video/webm;base64, prefix
+
+        const { data, error } = await supabase.functions.invoke('video-stream', {
+          body: {
+            videoChunk: base64Video,
+            location: currentLocation.current ? {
+              latitude: currentLocation.current.coords.latitude,
+              longitude: currentLocation.current.coords.longitude,
+              accuracy: currentLocation.current.coords.accuracy,
+              timestamp: currentLocation.current.timestamp
+            } : null,
+            emergencyType: 'panic_button'
+          }
+        });
+
+        if (error) {
+          console.error('Failed to send video chunk:', error);
+          setUploadStatus('Upload failed');
+        } else {
+          console.log('Video chunk sent successfully:', data);
+          setUploadStatus(`Chunk uploaded: ${(videoBlob.size / 1024).toFixed(1)}KB`);
+        }
+      };
+      reader.readAsDataURL(videoBlob);
+    } catch (error) {
+      console.error('Error sending video chunk:', error);
+      setUploadStatus('Upload error');
+    }
+  };
 
   // Enhanced location sharing with better error handling
   const shareLocation = async () => {
@@ -27,41 +77,25 @@ const EmergencyButton = () => {
     }
 
     const options = {
-      enableHighAccuracy: false, // Use less accurate but faster location
-      timeout: 5000, // 5 second timeout
-      maximumAge: 300000 // Accept cached location up to 5 minutes old
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 300000
     };
-
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        console.log('Location shared successfully:', {
+        currentLocation.current = position;
+        console.log('Location obtained successfully:', {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy
         });
-        setLocationStatus('GPS location shared');
+        setLocationStatus('GPS location obtained');
         setLocationSent(true);
       },
       (error) => {
-        console.warn('GPS location failed, using fallback:', error.message);
-        
-        // Handle different error types with user-friendly messages
-        switch(error.code) {
-          case error.PERMISSION_DENIED:
-            setLocationStatus('Using network location');
-            break;
-          case error.POSITION_UNAVAILABLE:
-            setLocationStatus('Using approximate location');
-            break;
-          case error.TIMEOUT:
-            setLocationStatus('Using cached location');
-            break;
-          default:
-            setLocationStatus('Location sent via fallback');
-        }
-        
-        // Still mark as "sent" since we have fallback methods
+        console.warn('GPS location failed:', error.message);
+        setLocationStatus('Using network location');
         setTimeout(() => setLocationSent(true), 1000);
       },
       options
@@ -69,58 +103,70 @@ const EmergencyButton = () => {
   };
 
   const startRecording = async () => {
+    if (!user) {
+      setError('Please log in to use emergency features');
+      return;
+    }
+
     try {
-      setCountdown(2);
+      setCountdown(3);
       
       // Enhanced countdown with vibration and audio cues
-      for (let i = 2; i > 0; i--) {
-        // Haptic feedback if available
+      for (let i = 3; i > 0; i--) {
         if (navigator.vibrate) {
-          navigator.vibrate(100);
+          navigator.vibrate(200);
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
         setCountdown(i - 1);
       }
       
-      // Share location immediately when recording starts
+      // Share location and notify emergency contacts
       shareLocation();
       setEmergencyContacted(true);
       
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
+        video: { 
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 }
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       });
       
       setStream(mediaStream);
       
-      const recorder = new MediaRecorder(mediaStream);
+      const recorder = new MediaRecorder(mediaStream, {
+        mimeType: 'video/webm;codecs=vp9',
+        videoBitsPerSecond: 1000000 // 1 Mbps
+      });
+      
       setMediaRecorder(recorder);
       chunks.current = [];
       
+      // Handle data available - send chunks to server in real-time
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunks.current.push(e.data);
+          // Send chunk to server immediately
+          sendVideoChunk(e.data);
         }
       };
       
-      recorder.onstop = () => {
-        const blob = new Blob(chunks.current, { type: 'video/webm' });
-        console.log('Recording saved:', blob);
-        
-        // Create download for demo
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `emergency-recording-${new Date().toISOString()}.webm`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      };
-      
-      recorder.start(1000);
+      // Start recording and send chunks every 2 seconds
+      recorder.start(2000);
       setIsRecording(true);
       setCountdown(null);
+      
+      // Show success message
+      toast({
+        title: "Emergency Recording Started",
+        description: "Video is being streamed to emergency services",
+        duration: 3000,
+      });
       
       // Start duration timer
       durationInterval.current = setInterval(() => {
@@ -131,32 +177,60 @@ const EmergencyButton = () => {
       console.error('Error accessing media devices:', err);
       setError('Could not access camera/microphone. Please check permissions.');
       setCountdown(null);
+      toast({
+        title: "Emergency Recording Failed",
+        description: "Could not access camera/microphone",
+        variant: "destructive",
+      });
     }
   };
   
   const stopRecording = () => {
     console.log('Stop recording called', { mediaRecorder, stream });
     
+    // Stop the media recorder
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
     }
     
+    // Stop all tracks to release camera/microphone
     if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach(track => {
+        track.stop();
+        console.log('Stopped track:', track.kind, track.label);
+      });
       setStream(null);
     }
     
+    // Clear intervals
     if (durationInterval.current) {
       clearInterval(durationInterval.current);
       durationInterval.current = null;
     }
     
+    if (uploadInterval.current) {
+      clearInterval(uploadInterval.current);
+      uploadInterval.current = null;
+    }
+    
+    // Reset state
     setIsRecording(false);
     setMediaRecorder(null);
     setRecordingDuration(0);
     setLocationSent(false);
     setLocationStatus('');
     setEmergencyContacted(false);
+    setUploadStatus('');
+    currentLocation.current = null;
+    
+    // Show completion message
+    toast({
+      title: "Emergency Recording Stopped",
+      description: "Recording has been sent to emergency services",
+      duration: 5000,
+    });
+    
+    console.log('Emergency recording session ended');
   };
 
   const formatDuration = (seconds: number) => {
@@ -258,8 +332,15 @@ const EmergencyButton = () => {
               {emergencyContacted && (
                 <div className="flex items-center text-blue-600 text-xs">
                   <Users className="h-4 w-4 mr-2" />
-                  <span>Emergency contacts notified</span>
+                  <span>Emergency services notified</span>
                   <div className="ml-auto w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                </div>
+              )}
+              {uploadStatus && (
+                <div className="flex items-center text-green-600 text-xs">
+                  <Shield className="h-4 w-4 mr-2" />
+                  <span>{uploadStatus}</span>
+                  <div className="ml-auto w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 </div>
               )}
             </div>
@@ -304,7 +385,7 @@ const EmergencyButton = () => {
               className={`h-18 w-18 rounded-full bg-gradient-to-r from-red-600 via-red-500 to-red-600 hover:from-red-700 hover:via-red-600 hover:to-red-700 text-white shadow-2xl transform hover:scale-110 transition-all duration-300 flex flex-col items-center justify-center border-4 border-white relative overflow-hidden ${
                 countdown !== null ? 'animate-bounce scale-125' : ''
               }`}
-              disabled={countdown !== null}
+              disabled={countdown !== null || !user}
             >
               {/* Animated Background */}
               <div className="absolute inset-0 bg-gradient-to-r from-red-400 to-red-600 opacity-50 animate-pulse"></div>
@@ -313,6 +394,11 @@ const EmergencyButton = () => {
                 <div className="relative z-10 flex flex-col items-center">
                   <span className="text-2xl font-bold animate-pulse">{countdown}</span>
                   <span className="text-xs font-medium">ACTIVATING</span>
+                </div>
+              ) : !user ? (
+                <div className="relative z-10 flex flex-col items-center">
+                  <AlertTriangle className="h-6 w-6 mb-1" />
+                  <span className="text-xs font-bold">LOGIN REQUIRED</span>
                 </div>
               ) : (
                 <div className="relative z-10 flex flex-col items-center">
@@ -335,17 +421,25 @@ const EmergencyButton = () => {
                 <div className="space-y-2 text-sm text-slate-600">
                   <div className="flex items-center">
                     <div className="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                    <span>Starts video/audio recording</span>
+                    <span>Live video streaming to emergency services</span>
                   </div>
                   <div className="flex items-center">
                     <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                    <span>Shares location with authorities</span>
+                    <span>GPS location shared with authorities</span>
                   </div>
                   <div className="flex items-center">
                     <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                    <span>Notifies emergency contacts</span>
+                    <span>Emergency contacts automatically notified</span>
                   </div>
                 </div>
+                {!user && (
+                  <div className="mt-3 pt-3 border-t border-slate-200 bg-yellow-50 p-2 rounded">
+                    <p className="text-xs text-yellow-800">
+                      <AlertTriangle className="h-3 w-3 inline mr-1" />
+                      Please log in to use emergency features
+                    </p>
+                  </div>
+                )}
                 <div className="mt-3 pt-3 border-t border-slate-200">
                   <p className="text-xs text-slate-500">
                     <Phone className="h-3 w-3 inline mr-1" />

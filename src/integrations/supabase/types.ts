@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      emergency_logs: {
+        Row: {
+          chunk_size: number | null
+          created_at: string
+          emergency_type: string
+          id: string
+          location_data: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+          video_path: string | null
+        }
+        Insert: {
+          chunk_size?: number | null
+          created_at?: string
+          emergency_type?: string
+          id?: string
+          location_data?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          video_path?: string | null
+        }
+        Update: {
+          chunk_size?: number | null
+          created_at?: string
+          emergency_type?: string
+          id?: string
+          location_data?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          video_path?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
