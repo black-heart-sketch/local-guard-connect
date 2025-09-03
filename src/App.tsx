@@ -1,24 +1,12 @@
-// App.tsx
-
-// 🔍 Debugging: Patch console.error to trace Context warnings
-console.error = ((error) => {
-  return (...args: any[]) => {
-    if (typeof args[0] === "string" && args[0].includes("Rendering <Context> directly")) {
-      console.trace("⚠️ Context Warning Trace:");
-    }
-    error(...args);
-  };
-})(console.error);
-
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { Toaster } from '@/components/ui/toaster';
-import { Toaster as Sonner } from '@/components/ui/sonner';
-import Index from '@/pages/Index';
-import Auth from '@/pages/Auth';
-import Dashboard from '@/pages/Dashboard';
-import NotFound from '@/pages/NotFound';
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Index from "./pages/Index";
+import Auth from "./pages/Auth";
+import NotFound from "./pages/NotFound";
+import EmergencyButton from "./components/emergency/EmergencyButton";
 
 const queryClient = new QueryClient();
 
@@ -27,14 +15,15 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <Router>
+      <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </Router>
+        <EmergencyButton />
+      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
