@@ -497,6 +497,36 @@ const EmergencyButton = () => {
     }
   };
   
+  const finalizeRecordingSession = async () => {
+    if (!recordingSessionIdRef.current) return;
+
+    try {
+      logEvent('SESSION_FINALIZATION_START', { sessionId: recordingSessionIdRef.current });
+      
+      // Mark session as completed in the database
+      const { error } = await (supabase as any)
+        .from('emergency_logs')
+        .update({ 
+          status: 'completed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('recording_session_id', recordingSessionIdRef.current);
+
+      if (error) {
+        logEvent('SESSION_FINALIZATION_ERROR', { error: error.message });
+      } else {
+        logEvent('SESSION_FINALIZATION_SUCCESS', { sessionId: recordingSessionIdRef.current });
+        toast({
+          title: "Recording Session Completed",
+          description: "Emergency video session has been finalized and sent to authorities",
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      logEvent('SESSION_FINALIZATION_EXCEPTION', { error: error.message });
+    }
+  };
+
   const stopRecording = () => {
     setIsStopping(true);
     logEvent('STOP_RECORDING_CALLED', {
@@ -561,6 +591,9 @@ const EmergencyButton = () => {
       uploadInterval.current = null;
     }
     
+    // Finalize the recording session before resetting state
+    finalizeRecordingSession();
+    
     // Reset state
     setIsRecording(false);
     setIsStopping(false);
@@ -573,12 +606,6 @@ const EmergencyButton = () => {
     setChunkCount(0);
     setTotalUploadSize(0);
     setLastChunkTime(null);
-    setRecordingSessionId(null);
-    recordingSessionIdRef.current = null;
-    setIsFirstChunk(true);
-    isFirstChunkRef.current = true;
-    currentLocation.current = null;
-    sessionStartTime.current = null;
     
     // Show completion message
     toast({
@@ -593,6 +620,14 @@ const EmergencyButton = () => {
       totalSize: totalUploadSize,
       duration: recordingDuration
     });
+
+    // Reset session state last
+    setRecordingSessionId(null);
+    recordingSessionIdRef.current = null;
+    setIsFirstChunk(true);
+    isFirstChunkRef.current = true;
+    currentLocation.current = null;
+    sessionStartTime.current = null;
   };
 
   const formatDuration = (seconds: number) => {

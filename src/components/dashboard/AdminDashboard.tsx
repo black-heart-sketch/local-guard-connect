@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, FileText, Clock, CheckCircle, XCircle, MapPin, Calendar, Filter, Eye, Download, X, User, Mail, MessageSquare, Image, File, ExternalLink, Map } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Search, FileText, Clock, CheckCircle, XCircle, MapPin, Calendar, Filter, Eye, Download, X, User, Mail, MessageSquare, Image, File, ExternalLink, Map, Users } from 'lucide-react';
+import { UserManagement } from './UserManagement';
 
 interface Report {
   id: string;
@@ -199,7 +201,7 @@ export function AdminDashboard() {
                 Admin Dashboard
               </h1>
               <p className="text-muted-foreground mt-1">
-                Manage and review crime reports
+                Manage reports, users, and system settings
               </p>
             </div>
             <Badge variant="secondary" className="text-sm">
@@ -210,6 +212,19 @@ export function AdminDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Tabs defaultValue="reports" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="reports" className="flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Crime Reports
+            </TabsTrigger>
+            <TabsTrigger value="users" className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              User Management
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="reports" className="space-y-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card className="hover:shadow-md transition-shadow cursor-pointer">
@@ -421,6 +436,12 @@ export function AdminDashboard() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="users">
+            <UserManagement />
+          </TabsContent>
+        </Tabs>
       </main>
 
     

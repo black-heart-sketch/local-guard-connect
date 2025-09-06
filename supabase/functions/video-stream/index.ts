@@ -82,17 +82,17 @@ serve(async (req) => {
       .from('emergency_logs')
       .select('*')
       .eq('recording_session_id', recordingSessionId)
-      .single();
+      .maybeSingle();
 
     let videoPath: string;
     let totalChunkSize: number;
 
     if (isFirstChunk || !existingSession) {
-      // First chunk or new session - create new record
+      // First chunk or new session - create new record and start video file
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `emergency-${user.id}-${recordingSessionId}-${timestamp}.webm`;
       
-      // Store video chunk in Supabase Storage
+      // Store initial video chunk in Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('emergency-videos')
         .upload(filename, videoBuffer, {
@@ -103,7 +103,7 @@ serve(async (req) => {
       if (uploadError) {
         console.error('Video upload failed:', uploadError);
         return new Response(
-          JSON.stringify({ error: 'Failed to store video chunk' }),
+          JSON.stringify({ error: 'Failed to store initial video chunk' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -126,45 +126,47 @@ serve(async (req) => {
         });
 
       if (logError) {
-        console.warn('Failed to log emergency:', logError);
+        console.warn('Failed to log emergency session:', logError);
       }
 
       console.log(`🚨 NEW EMERGENCY SESSION: ${recordingSessionId} started by user ${user.id}`);
+      console.log(`📹 Initial video chunk stored at: ${videoPath}`);
 
     } else {
-      // Subsequent chunk - append to existing video file
+      // Subsequent chunk - seamlessly append to existing video file for session continuity
       try {
-        // Download existing video file
+        // Download existing video file from storage
         const { data: existingVideo, error: downloadError } = await supabase.storage
           .from('emergency-videos')
           .download(existingSession.video_path);
 
         if (downloadError) {
-          console.error('Failed to download existing video:', downloadError);
+          console.error('Failed to download existing video for concatenation:', downloadError);
           return new Response(
-            JSON.stringify({ error: 'Failed to retrieve existing video' }),
+            JSON.stringify({ error: 'Failed to retrieve existing video for session concatenation' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Convert existing video to buffer and concatenate with new chunk
+        // Convert existing video to buffer and seamlessly concatenate with new chunk
         const existingBuffer = new Uint8Array(await existingVideo.arrayBuffer());
         const concatenatedBuffer = new Uint8Array(existingBuffer.length + videoBuffer.length);
         concatenatedBuffer.set(existingBuffer);
         concatenatedBuffer.set(videoBuffer, existingBuffer.length);
 
-        // Upload concatenated video back to storage
+        // Update the same video file with concatenated content (session-based approach)
         const { error: updateError } = await supabase.storage
           .from('emergency-videos')
           .update(existingSession.video_path, concatenatedBuffer, {
             contentType: 'video/webm',
-            cacheControl: '3600'
+            cacheControl: '3600',
+            upsert: true
           });
 
         if (updateError) {
           console.error('Failed to update video with new chunk:', updateError);
           return new Response(
-            JSON.stringify({ error: 'Failed to append video chunk' }),
+            JSON.stringify({ error: 'Failed to append video chunk to session' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -172,26 +174,27 @@ serve(async (req) => {
         videoPath = existingSession.video_path;
         totalChunkSize = existingSession.chunk_size + videoBuffer.length;
 
-        // Update emergency log entry
+        // Update emergency log entry with session progress
         const { error: updateLogError } = await supabase
           .from('emergency_logs')
           .update({
             chunk_size: totalChunkSize,
-            chunk_count: existingSession.chunk_count + 1,
-            updated_at: new Date().toISOString()
+            chunk_count: (existingSession.chunk_count || 0) + 1,
+            updated_at: new Date().toISOString(),
+            status: 'recording' // Keep recording status during session
           })
           .eq('recording_session_id', recordingSessionId);
 
         if (updateLogError) {
-          console.warn('Failed to update emergency log:', updateLogError);
+          console.warn('Failed to update emergency log with session progress:', updateLogError);
         }
 
-        console.log(`📹 APPENDED chunk ${chunkIndex} to session ${recordingSessionId}`);
+        console.log(`📹 APPENDED chunk ${chunkIndex} to session ${recordingSessionId} - Total: ${(existingSession.chunk_count || 0) + 1} chunks, ${totalChunkSize} bytes`);
 
       } catch (error) {
-        console.error('Error concatenating video chunks:', error);
+        console.error('Error during session video concatenation:', error);
         return new Response(
-          JSON.stringify({ error: 'Failed to concatenate video chunks' }),
+          JSON.stringify({ error: 'Failed to concatenate video chunks in session' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
