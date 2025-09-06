@@ -40,7 +40,15 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { videoChunk, location, emergencyType = 'general' } = body;
+    const { 
+      videoChunk, 
+      location, 
+      emergencyType = 'general',
+      recordingSessionId,
+      isFirstChunk = false,
+      chunkIndex = 0,
+      chunkSize = 0
+    } = body;
 
     if (!videoChunk) {
       return new Response(
@@ -49,50 +57,144 @@ serve(async (req) => {
       );
     }
 
+    if (!recordingSessionId) {
+      return new Response(
+        JSON.stringify({ error: 'No recording session ID provided' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log(`Received video chunk from user ${user.id}:`, {
+      sessionId: recordingSessionId,
+      chunkIndex,
       chunkSize: videoChunk.length,
+      isFirstChunk,
       location: location,
       emergencyType: emergencyType,
       timestamp: new Date().toISOString()
     });
 
-    // Convert base64 video chunk to blob for storage
+    // Convert base64 video chunk to buffer
     const videoBuffer = Uint8Array.from(atob(videoChunk), c => c.charCodeAt(0));
     
-    // Generate filename for this chunk
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `emergency-${user.id}-${timestamp}.webm`;
-    
-    // Store video chunk in Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('emergency-videos')
-      .upload(filename, videoBuffer, {
-        contentType: 'video/webm',
-        cacheControl: '3600'
-      });
-
-    if (uploadError) {
-      console.error('Video upload failed:', uploadError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to store video chunk' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Log emergency video reception to database
-    const { error: logError } = await supabase
+    // Check if this session already exists in the database
+    const { data: existingSession, error: sessionError } = await supabase
       .from('emergency_logs')
-      .insert({
-        user_id: user.id,
-        emergency_type: emergencyType,
-        video_path: uploadData.path,
-        location_data: location,
-        chunk_size: videoBuffer.length,
-        status: 'received'
-      });
+      .select('*')
+      .eq('recording_session_id', recordingSessionId)
+      .single();
 
-    if (logError) {
-      console.warn('Failed to log emergency:', logError);
+    let videoPath: string;
+    let totalChunkSize: number;
+
+    if (isFirstChunk || !existingSession) {
+      // First chunk or new session - create new record
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `emergency-${user.id}-${recordingSessionId}-${timestamp}.webm`;
+      
+      // Store video chunk in Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('emergency-videos')
+        .upload(filename, videoBuffer, {
+          contentType: 'video/webm',
+          cacheControl: '3600'
+        });
+
+      if (uploadError) {
+        console.error('Video upload failed:', uploadError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to store video chunk' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      videoPath = uploadData.path;
+      totalChunkSize = videoBuffer.length;
+
+      // Create new emergency log entry
+      const { error: logError } = await supabase
+        .from('emergency_logs')
+        .insert({
+          user_id: user.id,
+          emergency_type: emergencyType,
+          video_path: videoPath,
+          location_data: location,
+          chunk_size: totalChunkSize,
+          recording_session_id: recordingSessionId,
+          chunk_count: 1,
+          status: 'recording'
+        });
+
+      if (logError) {
+        console.warn('Failed to log emergency:', logError);
+      }
+
+      console.log(`🚨 NEW EMERGENCY SESSION: ${recordingSessionId} started by user ${user.id}`);
+
+    } else {
+      // Subsequent chunk - append to existing video file
+      try {
+        // Download existing video file
+        const { data: existingVideo, error: downloadError } = await supabase.storage
+          .from('emergency-videos')
+          .download(existingSession.video_path);
+
+        if (downloadError) {
+          console.error('Failed to download existing video:', downloadError);
+          return new Response(
+            JSON.stringify({ error: 'Failed to retrieve existing video' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Convert existing video to buffer and concatenate with new chunk
+        const existingBuffer = new Uint8Array(await existingVideo.arrayBuffer());
+        const concatenatedBuffer = new Uint8Array(existingBuffer.length + videoBuffer.length);
+        concatenatedBuffer.set(existingBuffer);
+        concatenatedBuffer.set(videoBuffer, existingBuffer.length);
+
+        // Upload concatenated video back to storage
+        const { error: updateError } = await supabase.storage
+          .from('emergency-videos')
+          .update(existingSession.video_path, concatenatedBuffer, {
+            contentType: 'video/webm',
+            cacheControl: '3600'
+          });
+
+        if (updateError) {
+          console.error('Failed to update video with new chunk:', updateError);
+          return new Response(
+            JSON.stringify({ error: 'Failed to append video chunk' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        videoPath = existingSession.video_path;
+        totalChunkSize = existingSession.chunk_size + videoBuffer.length;
+
+        // Update emergency log entry
+        const { error: updateLogError } = await supabase
+          .from('emergency_logs')
+          .update({
+            chunk_size: totalChunkSize,
+            chunk_count: existingSession.chunk_count + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('recording_session_id', recordingSessionId);
+
+        if (updateLogError) {
+          console.warn('Failed to update emergency log:', updateLogError);
+        }
+
+        console.log(`📹 APPENDED chunk ${chunkIndex} to session ${recordingSessionId}`);
+
+      } catch (error) {
+        console.error('Error concatenating video chunks:', error);
+        return new Response(
+          JSON.stringify({ error: 'Failed to concatenate video chunks' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // In a real emergency system, you would:
@@ -102,19 +204,23 @@ serve(async (req) => {
     // 4. Queue video for immediate review by authorities
 
     // Simulate emergency response
-    console.log(`🚨 EMERGENCY ALERT: User ${user.id} activated emergency recording`);
+    console.log(`🚨 EMERGENCY ALERT: User ${user.id} emergency recording session ${recordingSessionId}`);
     console.log(`📍 Location:`, location);
-    console.log(`📹 Video chunk stored at: ${uploadData.path}`);
+    console.log(`📹 Video stored at: ${videoPath}`);
+    console.log(`📊 Total size: ${totalChunkSize} bytes, Chunks: ${chunkIndex + 1}`);
 
     // Return success response
     return new Response(
       JSON.stringify({
         status: 'received',
-        message: 'Emergency video chunk processed successfully',
+        message: isFirstChunk ? 'Emergency recording session started' : 'Video chunk appended successfully',
         timestamp: new Date().toISOString(),
-        videoPath: uploadData.path,
+        videoPath: videoPath,
         chunkSize: videoBuffer.length,
-        emergencyId: `EMG-${user.id}-${Date.now()}`
+        totalSize: totalChunkSize,
+        chunkIndex: chunkIndex,
+        sessionId: recordingSessionId,
+        emergencyId: `EMG-${user.id}-${recordingSessionId}`
       }),
       {
         status: 200,

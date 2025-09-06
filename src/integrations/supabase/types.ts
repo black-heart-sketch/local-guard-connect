@@ -16,33 +16,39 @@ export type Database = {
     Tables: {
       emergency_logs: {
         Row: {
+          chunk_count: number | null
           chunk_size: number | null
           created_at: string
           emergency_type: string
           id: string
           location_data: Json | null
+          recording_session_id: string | null
           status: string
           updated_at: string
           user_id: string
           video_path: string | null
         }
         Insert: {
+          chunk_count?: number | null
           chunk_size?: number | null
           created_at?: string
           emergency_type?: string
           id?: string
           location_data?: Json | null
+          recording_session_id?: string | null
           status?: string
           updated_at?: string
           user_id: string
           video_path?: string | null
         }
         Update: {
+          chunk_count?: number | null
           chunk_size?: number | null
           created_at?: string
           emergency_type?: string
           id?: string
           location_data?: Json | null
+          recording_session_id?: string | null
           status?: string
           updated_at?: string
           user_id?: string
