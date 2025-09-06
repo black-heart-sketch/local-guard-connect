@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: local-guard-connect
+    env: node
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        fromService:
+          name: local-guard-connect
+          type: web
+          property: env.VITE_SUPABASE_URL
+      - key: VITE_SUPABASE_ANON_KEY
+        fromService:
+          name: local-guard-connect
+          type: web
+          property: env.VITE_SUPABASE_ANON_KEY
