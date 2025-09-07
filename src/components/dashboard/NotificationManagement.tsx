@@ -112,7 +112,7 @@ export function NotificationManagement() {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('notifications')
         .insert({
           title: formData.title,

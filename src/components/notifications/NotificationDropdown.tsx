@@ -36,7 +36,7 @@ export const NotificationDropdown = () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('notifications')
         .select('*')
         .or(`type.eq.general,and(type.eq.registered,target_user_id.is.null),and(type.eq.targeted,target_user_id.eq.${user.id})`)
@@ -59,9 +59,9 @@ export const NotificationDropdown = () => {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('notifications')
-        .update({ is_read: true } as any)
+        .update({ is_read: true })
         .eq('id', notificationId);
 
       if (error) {
@@ -90,9 +90,9 @@ export const NotificationDropdown = () => {
       
       if (unreadIds.length === 0) return;
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('notifications')
-        .update({ is_read: true } as any)
+        .update({ is_read: true })
         .in('id', unreadIds);
 
       if (error) {
