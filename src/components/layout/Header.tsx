@@ -3,12 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useState, useEffect } from "react";
+import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 
 export const Header = () => {
   const { user, profile, signOut } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(3); // Mock notification count
 
   // Handle scroll effect
   useEffect(() => {
@@ -98,16 +98,7 @@ export const Header = () => {
                 </Link>
                 
                 {/* Notifications */}
-                <div className="relative">
-                  <Button variant="ghost" size="sm" className="relative p-2">
-                    <Bell className="h-4 w-4" />
-                    {notificationCount > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
-                        {notificationCount}
-                      </span>
-                    )}
-                  </Button>
-                </div>
+                <NotificationDropdown />
 
                 {/* User Profile Dropdown */}
                 <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border hover:bg-slate-100 transition-colors cursor-pointer group">

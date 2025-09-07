@@ -117,9 +117,9 @@ export function NotificationManagement() {
         .insert({
           title: formData.title,
           message: formData.message,
-          type: formData.type,
+          type: formData.type as 'general' | 'registered' | 'targeted',
           target_user_id: formData.type === 'targeted' ? formData.target_user_id : null,
-          sender_id: user?.id,
+          sender_id: user?.id || '',
         });
 
       if (error) throw error;
