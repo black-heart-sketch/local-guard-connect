@@ -178,6 +178,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_admin_or_police: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       send_emergency_video: {
         Args: { location_data?: Json; user_id: string; video_data: string }
         Returns: Json

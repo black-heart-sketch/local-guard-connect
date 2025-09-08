@@ -1,14 +1,28 @@
 import { Shield, LogOut, User, Menu, X, Bell, MapPin, AlertTriangle, Users, ChevronDown, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useState, useEffect } from "react";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 
 export const Header = () => {
   const { user, profile, signOut } = useAuth();
+  const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
 
   // Handle scroll effect
   useEffect(() => {
@@ -101,28 +115,45 @@ export const Header = () => {
                 <NotificationDropdown />
 
                 {/* User Profile Dropdown */}
-                <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border hover:bg-slate-100 transition-colors cursor-pointer group">
-                  <div className="w-8 h-8 bg-gradient-to-br from-primary to-blue-600 rounded-full flex items-center justify-center">
-                    <User className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-sm font-medium text-slate-800">
-                      {profile?.full_name || user.email?.split('@')[0] || 'User'}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border hover:bg-slate-100 transition-colors cursor-pointer group">
+                      <div className="w-8 h-8 bg-gradient-to-br from-primary to-blue-600 rounded-full flex items-center justify-center">
+                        <User className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-sm font-medium text-slate-800">
+                          {profile?.full_name || user.email?.split('@')[0] || 'User'}
+                        </div>
+                        <div className="text-xs text-slate-500">Community Member</div>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
                     </div>
-                    <div className="text-xs text-slate-500">Community Member</div>
-                  </div>
-                  <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
-                </div>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                      Dashboard
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/profile')}>
+                      Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleSignOut}>
+                      Log out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
-                {/* Sign Out Button */}
+                {/* Sign Out Button - Mobile fallback */}
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  onClick={signOut}
-                  className="hidden md:flex items-center text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  onClick={handleSignOut}
+                  className="md:hidden items-center text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors"
                 >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
+                  <LogOut className="h-4 w-4" />
                 </Button>
               </div>
             ) : (
@@ -193,10 +224,28 @@ export const Header = () => {
                         <div className="text-sm text-slate-500">Community Member</div>
                       </div>
                     </div>
+                    <Link to="/dashboard" className="block w-full">
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start mt-2 text-slate-600 hover:bg-slate-50"
+                      >
+                        <LayoutDashboard className="h-4 w-4 mr-3" />
+                        Dashboard
+                      </Button>
+                    </Link>
+                    <Link to="/profile" className="block w-full">
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start text-slate-600 hover:bg-slate-50"
+                      >
+                        <User className="h-4 w-4 mr-3" />
+                        Profile
+                      </Button>
+                    </Link>
                     <Button
                       variant="ghost"
-                      onClick={signOut}
-                      className="w-full justify-start mt-2 text-red-600 hover:bg-red-50"
+                      onClick={handleSignOut}
+                      className="w-full justify-start text-red-600 hover:bg-red-50"
                     >
                       <LogOut className="h-4 w-4 mr-3" />
                       Sign Out
