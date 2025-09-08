@@ -57,14 +57,32 @@ export function NotificationManagement() {
     try {
       const { data, error } = await supabase
         .from('notifications')
-        .select(`
-          *,
-          target_user:profiles!notifications_target_user_id_fkey(full_name, user_id)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setNotifications(data || []);
+
+      // Fetch user profiles for targeted notifications
+      const targetUserIds = [...new Set((data as any[])?.filter((n: any) => n.target_user_id).map((n: any) => n.target_user_id))];
+      let profiles: any[] = [];
+      
+      if (targetUserIds.length > 0) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('user_id, full_name')
+          .in('user_id', targetUserIds);
+        profiles = profileData || [];
+      }
+
+      // Combine the data
+      const notificationsWithProfiles = (data as any[])?.map((notification: any) => ({
+        ...notification,
+        target_user: notification.target_user_id 
+          ? (profiles as any[]).find((profile: any) => profile.user_id === notification.target_user_id) || null
+          : null
+      })) || [];
+
+      setNotifications(notificationsWithProfiles);
     } catch (error: any) {
       toast({
         title: 'Error',

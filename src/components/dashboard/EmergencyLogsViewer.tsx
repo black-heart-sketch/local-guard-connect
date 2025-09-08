@@ -52,14 +52,25 @@ export function EmergencyLogsViewer() {
     try {
       const { data, error } = await supabase
         .from('emergency_logs')
-        .select(`
-          *,
-          user_profile:profiles!emergency_logs_user_id_fkey(full_name, phone)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setLogs(data || []);
+
+      // Fetch user profiles separately
+      const userIds = [...new Set((data as any[])?.map((log: any) => log.user_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, full_name, phone')
+        .in('user_id', userIds);
+
+      // Combine the data
+      const logsWithProfiles = (data as any[])?.map((log: any) => ({
+        ...log,
+        user_profile: (profiles as any[])?.find((profile: any) => profile.user_id === log.user_id) || null
+      })) || [];
+
+      setLogs(logsWithProfiles);
     } catch (error: any) {
       toast({
         title: 'Error',
