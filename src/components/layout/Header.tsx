@@ -1,4 +1,7 @@
-import { Shield, LogOut, User, Menu, X, Bell, MapPin, AlertTriangle, Users, ChevronDown, LayoutDashboard } from "lucide-react";
+import { 
+  Shield, LogOut, User, Menu, X, Bell, MapPin, AlertTriangle, Users, 
+  ChevronDown, LayoutDashboard 
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { 
   DropdownMenu,
@@ -33,16 +36,38 @@ export const Header = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // ✅ Handle navigation with smooth scroll
+  const handleNavigation = (id?: string) => {
+    if (window.location.pathname !== "/") {
+      // Navigate to landing page first
+      navigate("/", { replace: false });
+      // Wait a moment for page render
+      setTimeout(() => {
+        if (id) {
+          const el = document.querySelector(id);
+          el?.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 150);
+    } else {
+      // Already on landing page
+      if (id) {
+        const el = document.querySelector(id);
+        el?.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+  };
+
   const navigationItems = [
-    { href: "./#features", label: "Features", icon: Shield },
-    { href: "./#how-it-works", label: "How It Works", icon: Users },
-    { href: "./#community", label: "Community", icon: MapPin },
-    { href: "./#emergency", label: "Emergency", icon: AlertTriangle, isEmergency: true }
+    { id: "#features", label: "Features", icon: Shield },
+    { id: "#how-it-works", label: "How It Works", icon: Users },
+    { id: "#community", label: "Community", icon: MapPin },
+    { id: "#emergency", label: "Emergency", icon: AlertTriangle, isEmergency: true }
   ];
 
   return (
     <header 
-      className={`sticky top-0 z-50 transition-all duration-300 ${
+    
+      className={`sticky top-0 z-50 transition-all duration-300  ${
         isScrolled 
           ? 'bg-white/95 backdrop-blur-md shadow-lg border-b border-slate-200/50' 
           : 'bg-white/80 backdrop-blur-sm border-b border-slate-100'
@@ -61,31 +86,30 @@ export const Header = () => {
         <div className="flex items-center justify-between">
           {/* Logo Section */}
           <Link to="/">
-  <div className="flex items-center space-x-3">
-    <div className="relative">
-      <div className="absolute inset-0 bg-primary/20 rounded-xl blur-lg"></div>
-      <div className="relative p-2 bg-gradient-to-br from-primary to-blue-600 rounded-xl shadow-lg">
-        <Shield className="h-6 w-6 text-white" />
-      </div>
-    </div>
-    <div>
-      <span className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-        Local Guard Connect
-      </span>
-      <div className="text-xs text-slate-500 -mt-1">Community Safety Network</div>
-    </div>
-  </div>
-</Link>
-
+            <div className="flex items-center space-x-3">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/20 rounded-xl blur-lg"></div>
+                <div className="relative p-2 bg-gradient-to-br from-primary to-blue-600 rounded-xl shadow-lg">
+                  <Shield className="h-6 w-6 text-white" />
+                </div>
+              </div>
+              <div>
+                <span className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                  Local Guard Connect
+                </span>
+                <div className="text-xs text-slate-500 -mt-1">Community Safety Network</div>
+              </div>
+            </div>
+          </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center space-x-1">
             {navigationItems.map((item) => {
               const Icon = item.icon;
               return (
-                <a
-                  key={item.href}
-                  href={item.href}
+                <button
+                  key={item.id}
+                  onClick={() => handleNavigation(item.id)}
                   className={`group relative px-4 py-2 rounded-lg transition-all duration-200 flex items-center space-x-2 ${
                     item.isEmergency 
                       ? 'text-red-600 hover:bg-red-50 hover:text-red-700' 
@@ -98,7 +122,7 @@ export const Header = () => {
                     <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                   )}
                   <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-0 h-0.5 bg-primary transition-all duration-200 group-hover:w-full"></div>
-                </a>
+                </button>
               );
             })}
           </nav>
@@ -108,11 +132,7 @@ export const Header = () => {
             {user ? (
               <div className="flex items-center gap-3">
                 {/* Dashboard Button */}
-                <Link to="/dashboard">
-                  <Button variant="ghost" size="sm" className="p-2" title="Dashboard">
-                    <LayoutDashboard className="h-4 w-4" />
-                  </Button>
-                </Link>
+               
                 
                 {/* Notifications */}
                 <NotificationDropdown />
@@ -195,10 +215,12 @@ export const Header = () => {
                 {navigationItems.map((item) => {
                   const Icon = item.icon;
                   return (
-                    <a
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setIsMobileMenuOpen(false)}
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        handleNavigation(item.id);
+                        setIsMobileMenuOpen(false);
+                      }}
                       className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                         item.isEmergency
                           ? 'text-red-600 hover:bg-red-50'
@@ -210,7 +232,7 @@ export const Header = () => {
                       {item.isEmergency && (
                         <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse ml-auto"></div>
                       )}
-                    </a>
+                    </button>
                   );
                 })}
                 
