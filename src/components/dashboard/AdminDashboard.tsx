@@ -14,6 +14,7 @@ import { Search, FileText, Clock, CheckCircle, XCircle, MapPin, Calendar, Filter
 import { UserManagement } from './UserManagement';
 import { NotificationManagement } from './NotificationManagement';
 import { EmergencyLogsViewer } from './EmergencyLogsViewer';
+import { Header } from '@/components/layout/Header';
 
 interface Report {
   id: string;
@@ -195,6 +196,7 @@ export function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Header />
       <header className="bg-card border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex justify-between items-center">

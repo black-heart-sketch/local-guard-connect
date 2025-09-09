@@ -9,6 +9,7 @@ import { ReportPopup } from '@/components/reports/ReportPopup';
 import EmergencyButton from '@/components/emergency/EmergencyButton';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Plus, MapPin, Calendar } from 'lucide-react';
+import { Header } from '@/components/layout/Header';
 
 interface Report {
   id: string;
@@ -112,6 +113,7 @@ export function CitizenDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Header />
       <header className="bg-card border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex justify-between items-center">

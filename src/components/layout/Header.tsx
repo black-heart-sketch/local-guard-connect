@@ -34,10 +34,10 @@ export const Header = () => {
   }, []);
 
   const navigationItems = [
-    { href: "#features", label: "Features", icon: Shield },
-    { href: "#how-it-works", label: "How It Works", icon: Users },
-    { href: "#community", label: "Community", icon: MapPin },
-    { href: "#emergency", label: "Emergency", icon: AlertTriangle, isEmergency: true }
+    { href: "./#features", label: "Features", icon: Shield },
+    { href: "./#how-it-works", label: "How It Works", icon: Users },
+    { href: "./#community", label: "Community", icon: MapPin },
+    { href: "./#emergency", label: "Emergency", icon: AlertTriangle, isEmergency: true }
   ];
 
   return (
@@ -60,20 +60,23 @@ export const Header = () => {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           {/* Logo Section */}
-          <div className="flex items-center space-x-3">
-            <div className="relative">
-              <div className="absolute inset-0 bg-primary/20 rounded-xl blur-lg"></div>
-              <div className="relative p-2 bg-gradient-to-br from-primary to-blue-600 rounded-xl shadow-lg">
-                <Shield className="h-6 w-6 text-white" />
-              </div>
-            </div>
-            <div>
-              <span className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                Local Guard Connect
-              </span>
-              <div className="text-xs text-slate-500 -mt-1">Community Safety Network</div>
-            </div>
-          </div>
+          <Link to="/">
+  <div className="flex items-center space-x-3">
+    <div className="relative">
+      <div className="absolute inset-0 bg-primary/20 rounded-xl blur-lg"></div>
+      <div className="relative p-2 bg-gradient-to-br from-primary to-blue-600 rounded-xl shadow-lg">
+        <Shield className="h-6 w-6 text-white" />
+      </div>
+    </div>
+    <div>
+      <span className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+        Local Guard Connect
+      </span>
+      <div className="text-xs text-slate-500 -mt-1">Community Safety Network</div>
+    </div>
+  </div>
+</Link>
+
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center space-x-1">
