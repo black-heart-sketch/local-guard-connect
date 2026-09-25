@@ -11,16 +11,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useState, useEffect } from "react";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export const Header = () => {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { locale, setLocale, t } = useLanguage();
 
   const handleSignOut = async () => {
     await signOut();
@@ -36,32 +39,32 @@ export const Header = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // ✅ Handle navigation with smooth scroll
-  const handleNavigation = (id?: string) => {
-    if (window.location.pathname !== "/") {
-      // Navigate to landing page first
-      navigate("/", { replace: false });
-      // Wait a moment for page render
-      setTimeout(() => {
-        if (id) {
-          const el = document.querySelector(id);
+  // ✅ Handle navigation with smooth scroll or route change
+  const handleNavigation = (item: { id?: string; path?: string }) => {
+    setIsMobileMenuOpen(false); // Close mobile menu on navigation
+    if (item.path) {
+      navigate(item.path);
+    } else if (item.id) {
+      if (location.pathname !== "/") {
+        navigate("/", { replace: false });
+        setTimeout(() => {
+          const el = document.querySelector(item.id!);
           el?.scrollIntoView({ behavior: "smooth" });
-        }
-      }, 150);
-    } else {
-      // Already on landing page
-      if (id) {
-        const el = document.querySelector(id);
+        }, 150);
+      } else {
+        const el = document.querySelector(item.id);
         el?.scrollIntoView({ behavior: "smooth" });
       }
     }
   };
 
   const navigationItems = [
-    { id: "#features", label: "Features", icon: Shield },
-    { id: "#how-it-works", label: "How It Works", icon: Users },
-    { id: "#community", label: "Community", icon: MapPin },
-    { id: "#emergency", label: "Emergency", icon: AlertTriangle, isEmergency: true }
+    { id: "#features", label: t('features'), icon: Shield },
+    { id: "#how-it-works", label: t('how'), icon: Users },
+    { path: "/community", label: t('community'), icon: Users },
+    { path: "/partners", label: t('partners'), icon: Shield },
+    { path: "/track", label: t('trackReport'), icon: MapPin },
+    { id: "#emergency", label: t('emergency'), icon: AlertTriangle, isEmergency: true }
   ];
 
   return (
@@ -77,7 +80,7 @@ export const Header = () => {
       <div className="bg-gradient-to-r from-red-600 to-red-500 text-white py-1">
         <div className="container mx-auto px-4 text-center">
           <span className="text-xs font-medium">
-            🚨 Emergency? Call 911 immediately | Non-emergency reports welcome 24/7
+            🚨 {t('emergencyBanner')}
           </span>
         </div>
       </div>
@@ -89,15 +92,15 @@ export const Header = () => {
             <div className="flex items-center space-x-3">
               <div className="relative">
                 <div className="absolute inset-0 bg-primary/20 rounded-xl blur-lg"></div>
-                <div className="relative p-2 bg-gradient-to-br from-primary to-blue-600 rounded-xl shadow-lg">
-                  <Shield className="h-6 w-6 text-white" />
+                <div className="relative p-2  from-primary  rounded-xl shadow-lg">
+                  <img src="/favicon.jpeg" alt="Logo" className="h-8 w-8" />
                 </div>
               </div>
               <div>
                 <span className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                  Local Guard Connect
+                  CrimeX
                 </span>
-                <div className="text-xs text-slate-500 -mt-1">Community Safety Network</div>
+                <div className="text-xs text-slate-500 -mt-1">{t('safetyNetwork')}</div>
               </div>
             </div>
           </Link>
@@ -106,29 +109,48 @@ export const Header = () => {
           <nav className="hidden lg:flex items-center space-x-1">
             {navigationItems.map((item) => {
               const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleNavigation(item.id)}
-                  className={`group relative px-4 py-2 rounded-lg transition-all duration-200 flex items-center space-x-2 ${
-                    item.isEmergency 
-                      ? 'text-red-600 hover:bg-red-50 hover:text-red-700' 
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
-                  }`}
-                >
+              const commonClasses = `group relative px-4 py-2 rounded-lg transition-all duration-200 flex items-center space-x-2 ${
+                item.isEmergency
+                  ? 'text-red-600 hover:bg-red-50 hover:text-red-700'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+              }`;
+
+              const content = (
+                <>
                   <Icon className="h-4 w-4" />
                   <span className="text-sm font-medium">{item.label}</span>
                   {item.isEmergency && (
                     <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                   )}
                   <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-0 h-0.5 bg-primary transition-all duration-200 group-hover:w-full"></div>
-                </button>
+                </>
               );
+
+              if (item.path) {
+                return (
+                  <Link to={item.path} key={item.path} className={commonClasses}>
+                    {content}
+                  </Link>
+                );
+              } else {
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavigation(item)}
+                    className={commonClasses}
+                  >
+                    {content}
+                  </button>
+                );
+              }
             })}
           </nav>
 
           {/* User Section */}
           <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setLocale(locale === 'en' ? 'fr' : 'en')} aria-label="Change language">
+              {t('language')}
+            </Button>
             {user ? (
               <div className="flex items-center gap-3">
                 {/* Dashboard Button */}
@@ -154,17 +176,17 @@ export const Header = () => {
                     </div>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                    <DropdownMenuLabel>{t('profile')}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                      Dashboard
+                      {t('dashboard')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/profile')}>
-                      Profile
+                      {t('profile')}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleSignOut}>
-                      Log out
+                      {t('logout')}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -183,13 +205,13 @@ export const Header = () => {
               <div className="flex items-center gap-2">
                 <Link to="/auth">
                   <Button variant="ghost" className="hidden sm:flex">
-                    Sign In
+                    {t('signIn')}
                   </Button>
                 </Link>
                 <Link to="/auth">
                   <Button className="bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
                     <Shield className="h-4 w-4 mr-2" />
-                    Get Started
+                    {t('getStarted')}
                   </Button>
                 </Link>
               </div>
@@ -214,26 +236,38 @@ export const Header = () => {
               <nav className="space-y-2">
                 {navigationItems.map((item) => {
                   const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        handleNavigation(item.id);
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                        item.isEmergency
-                          ? 'text-red-600 hover:bg-red-50'
-                          : 'text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
+                  const commonClasses = `flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
+                    item.isEmergency
+                      ? 'text-red-600 hover:bg-red-50'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`;
+                  const content = (
+                    <>
                       <Icon className="h-5 w-5" />
                       <span className="font-medium">{item.label}</span>
                       {item.isEmergency && (
                         <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse ml-auto"></div>
                       )}
-                    </button>
+                    </>
                   );
+
+                  if (item.path) {
+                    return (
+                      <Link to={item.path} key={item.path} className={commonClasses} onClick={() => setIsMobileMenuOpen(false)}>
+                        {content}
+                      </Link>
+                    );
+                  } else {
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => handleNavigation(item)}
+                        className={commonClasses}
+                      >
+                        {content}
+                      </button>
+                    );
+                  }
                 })}
                 
                 {user && (

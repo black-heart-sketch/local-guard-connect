@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { CitizenDashboard } from '@/components/dashboard/CitizenDashboard';
@@ -20,7 +19,7 @@ export default function Dashboard() {
   }
 
   // Show role-based dashboard
-  if (profile?.role === 'admin' || profile?.role === 'police') {
+  if (profile?.role && ['admin', 'dispatcher', 'police', 'gendarmerie', 'fire', 'medical', 'ngo', 'council'].includes(profile.role)) {
     return <AdminDashboard />;
   }
 

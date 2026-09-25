@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -54,7 +54,7 @@ export function UserManagement() {
 
   const fetchAllProfiles = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
@@ -94,7 +94,7 @@ export function UserManagement() {
 
   const updateUserRole = async (profileId: string, newRole: string) => {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await (api as any)
         .from('profiles')
         .update({ 
           role: newRole,
@@ -124,7 +124,7 @@ export function UserManagement() {
 
   const updateProfile = async (profileId: string, updates: Partial<Profile>) => {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await (api as any)
         .from('profiles')
         .update({ 
           ...updates,
@@ -162,7 +162,7 @@ export function UserManagement() {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('profiles')
         .delete()
         .eq('id', profileId);
@@ -237,6 +237,7 @@ export function UserManagement() {
   };
 
   const canManageUsers = currentUserProfile?.role === 'admin';
+  console.log(`this user with role: ${currentUserProfile} can manage users: ${canManageUsers}`);
 
   if (!canManageUsers) {
     return (
@@ -295,6 +296,7 @@ export function UserManagement() {
       </div>
 
       {/* Filters and Actions */}
+      if (!canManageUsers) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
@@ -334,7 +336,7 @@ export function UserManagement() {
           </div>
         </CardContent>
       </Card>
-
+      }
       {/* Users List */}
       <Card>
         <CardHeader>

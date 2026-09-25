@@ -1,0 +1,71 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]: "🚨 Emergency: Police 117 · Gendarmerie 113 · Fire 118 · SAMU 119"
+      - generic [ref=e9]:
+        - link "Logo CrimeX Cameroon safety network" [ref=e10] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e11]:
+            - img "Logo" [ref=e15]
+            - generic [ref=e16]:
+              - text: CrimeX
+              - generic [ref=e17]: Cameroon safety network
+        - navigation [ref=e18]:
+          - button "Features" [ref=e19] [cursor=pointer]
+          - button "How it works" [ref=e23] [cursor=pointer]
+          - link "Community" [ref=e30] [cursor=pointer]:
+            - /url: /community
+          - link "Partners" [ref=e37] [cursor=pointer]:
+            - /url: /partners
+          - link "Track report" [ref=e41] [cursor=pointer]:
+            - /url: /track
+          - button "Emergency" [ref=e46] [cursor=pointer]
+        - generic [ref=e51]:
+          - button "Change language" [ref=e52] [cursor=pointer]: Français
+          - generic [ref=e53]:
+            - link [ref=e54] [cursor=pointer]:
+              - /url: /auth
+              - button "Sign in" [ref=e55]
+            - link [ref=e56] [cursor=pointer]:
+              - /url: /auth
+              - button "Get started" [ref=e57]
+    - main [ref=e58]:
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - heading "Track an anonymous report" [level=3] [ref=e61]
+          - paragraph [ref=e62]: Use the reference and recovery code provided when you submitted the report.
+        - generic [ref=e63]:
+          - generic [ref=e64]:
+            - text: Reference
+            - textbox "CMR-2026-XXXXXXXX" [ref=e65]
+          - generic [ref=e66]:
+            - text: Recovery code
+            - textbox [ref=e67]
+          - button "View status" [disabled]
+    - contentinfo [ref=e68]:
+      - generic [ref=e69]:
+        - generic [ref=e70]:
+          - generic [ref=e71]: CrimeX
+          - paragraph [ref=e74]: A Cameroon-focused reporting, referral and community-safety platform. Delivery to services depends on connected partners.
+        - generic [ref=e75]:
+          - heading "Quick access" [level=3] [ref=e76]
+          - navigation [ref=e77]:
+            - link "Track a report" [ref=e78] [cursor=pointer]:
+              - /url: /track
+            - link "Incident map" [ref=e79] [cursor=pointer]:
+              - /url: /map
+            - link "Verified partners" [ref=e80] [cursor=pointer]:
+              - /url: /partners
+            - link "Support the platform" [ref=e81] [cursor=pointer]:
+              - /url: /support
+        - generic [ref=e82]:
+          - heading "Cameroon emergency lines" [level=3] [ref=e83]
+          - generic [ref=e84]:
+            - paragraph [ref=e85]: Police 117 · Gendarmerie 113 · Pompiers/Fire 118 · SAMU 119
+            - paragraph [ref=e88]: Yaoundé, Cameroun
+            - paragraph [ref=e92]: If danger is immediate, call the appropriate service directly.
+      - generic [ref=e93]: © 2026 CrimeX. Incident reporting is free.
+  - button "EMERGENCY" [ref=e97] [cursor=pointer]

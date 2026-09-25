@@ -291,7 +291,7 @@ const CrimeMapPage = () => {
                 <Card>
                   <CardContent className="pt-6">
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground mb-2 block">Coordinates</label>
+                      <label className="text-sm  font-medium text-muted-foreground mb-2 block">Coordinates</label>
                       <div className="bg-muted/30 p-3 rounded font-mono text-sm">
                         {typeof selectedReport.coordinates === 'string' 
                           ? selectedReport.coordinates 
@@ -311,5 +311,6 @@ const CrimeMapPage = () => {
     </div>
   );
 };
+
 
 export default CrimeMapPage;

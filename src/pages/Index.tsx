@@ -35,13 +35,13 @@ const Index = () => {
     },
     {
       icon: MapPin,
-      title: "Real-Time Crime Map",
-      description: "View and track criminal activity in your area with live updates"
+      title: "Privacy-Aware Incident Map",
+      description: "View delayed, resolved, non-sensitive incidents with approximate locations"
     },
     {
       icon: AlertTriangle,
       title: "Emergency Panic Button",
-      description: "Instant emergency alerts with GPS location to authorities"
+      description: "Queue GPS and private evidence for dispatch, with official call fallbacks"
     },
     {
       icon: Eye,
@@ -51,30 +51,30 @@ const Index = () => {
     {
       icon: Heart,
       title: "GBV Support Module",
-      description: "Specialized reporting for gender-based violence with NGO partnerships"
+      description: "Protected reporting for gender-based violence with controlled referral workflows"
     },
     {
       icon: Users,
-      title: "Community Patrol",
-      description: "Coordinate with verified community safety groups and patrols"
+      title: "Verified Safety Partners",
+      description: "Connect reports to approved agencies, councils, NGOs, and community groups"
     },
     {
       icon: Lock,
-      title: "Secure Evidence Vault",
-      description: "Store sensitive evidence in an encrypted, PIN-protected vault"
+      title: "Private Evidence Vault",
+      description: "Evidence is access-controlled and separated from the public safety map"
     },
     {
       icon: MessageCircle,
-      title: "Multi-Language Support",
-      description: "Report in English, French, and other local languages"
+      title: "Bilingual Access",
+      description: "Use core reporting and safety flows in English or French"
     }
   ];
 
   const stats = [
-    { number: "10,000+", label: "Reports Submitted", icon: FileText },
-    { number: "2,500+", label: "Cases Resolved", icon: UserCheck },
-    { number: "50+", label: "Communities Protected", icon: Users },
-    { number: "24/7", label: "Emergency Response", icon: Clock }
+    { number: "EN / FR", label: "Bilingual Access", icon: FileText },
+    { number: "Offline", label: "Queued Reporting", icon: UserCheck },
+    { number: "10", label: "Cameroon Regions", icon: Users },
+    { number: "Private", label: "Sensitive Evidence", icon: Clock }
   ];
 
   return (
@@ -82,11 +82,38 @@ const Index = () => {
       <Header />
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-accent/5 to-background"></div>
+     {/* Hero Section */}
+     <section className="relative overflow-hidden">
+        {/* Animated Background Layers */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-accent/5 to-background">
+          {/* Animated gradient orbs */}
+          <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-20 right-10 w-96 h-96 bg-accent/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+          <div className="absolute top-1/2 left-1/3 w-64 h-64 bg-primary/10 rounded-full blur-2xl animate-pulse" style={{ animationDelay: '2s' }}></div>
+          
+          {/* Floating particles */}
+          <div className="absolute inset-0">
+            {[...Array(15)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute w-2 h-2 bg-primary/30 rounded-full animate-float"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 5}s`,
+                  animationDuration: `${5 + Math.random() * 10}s`,
+                }}
+              ></div>
+            ))}
+          </div>
+          
+          {/* Grid overlay */}
+          <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        </div>
+        
         <div className="container mx-auto px-4 py-20 relative z-10">
           <div className="max-w-4xl mx-auto text-center">
-            <Badge variant="secondary" className="mb-6">
+            <Badge variant="secondary" className="mb-6 backdrop-blur-sm bg-background/50">
               🛡️ Protecting Communities Together
             </Badge>
             <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-6 leading-tight">
@@ -95,12 +122,12 @@ const Index = () => {
             </h1>
             <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
               Report crimes, stay informed, and build safer communities with our comprehensive crime reporting platform. 
-              Anonymous reporting, real-time alerts, and emergency response - all in your pocket.
+              Anonymous reporting, offline queuing, local safety notices, and official emergency call options—all in one place.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
                 size="lg" 
-                className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
                 onClick={openReportPopup}
               >
                 <AlertTriangle className="mr-2 h-5 w-5" />
@@ -109,7 +136,7 @@ const Index = () => {
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="border-primary text-primary hover:bg-primary/5"
+                className="border-primary text-primary hover:bg-primary/5 backdrop-blur-sm hover:scale-105 transition-all duration-300"
                 onClick={() => window.location.href = '/map'}
               >
                 <MapPin className="mr-2 h-5 w-5" />
@@ -118,6 +145,36 @@ const Index = () => {
             </div>
           </div>
         </div>
+        
+        <style jsx>{`
+          @keyframes float {
+            0%, 100% {
+              transform: translateY(0) translateX(0);
+              opacity: 0;
+            }
+            10% {
+              opacity: 1;
+            }
+            90% {
+              opacity: 1;
+            }
+            100% {
+              transform: translateY(-100vh) translateX(20px);
+              opacity: 0;
+            }
+          }
+          
+          .animate-float {
+            animation: float linear infinite;
+          }
+          
+          .bg-grid-pattern {
+            background-image: 
+              linear-gradient(to right, currentColor 1px, transparent 1px),
+              linear-gradient(to bottom, currentColor 1px, transparent 1px);
+            background-size: 4rem 4rem;
+          }
+        `}</style>
       </section>
 
       {/* Stats Section */}
@@ -172,8 +229,8 @@ const Index = () => {
       <section id="how-it-works" className="py-20 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-foreground mb-4">How Local Guard Connect Works</h2>
-            <p className="text-xl text-muted-foreground">Simple, secure, and effective reporting in three steps</p>
+            <h2 className="text-4xl font-bold text-foreground mb-4">How CrimeX Works</h2>
+            <p className="text-xl text-muted-foreground">Clear, privacy-conscious reporting in three steps</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center">
@@ -191,7 +248,7 @@ const Index = () => {
               </div>
               <h3 className="text-2xl font-bold text-foreground mb-4">2. Verify</h3>
               <p className="text-muted-foreground leading-relaxed">
-                Reports are reviewed by our admin team and verified with local authorities for accuracy and legitimacy.
+                Authorized operators triage reports and can assign them to a verified partner where an operational agreement exists.
               </p>
             </div>
             <div className="text-center">
@@ -200,7 +257,7 @@ const Index = () => {
               </div>
               <h3 className="text-2xl font-bold text-foreground mb-4">3. Act</h3>
               <p className="text-muted-foreground leading-relaxed">
-                Community and authorities take action. Get updates on your reports and stay informed about your area's safety.
+                Follow your case status and receive updates. Connected responders record acknowledgement and action in the case timeline.
               </p>
             </div>
           </div>
@@ -213,31 +270,30 @@ const Index = () => {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
               <Badge variant="destructive" className="mb-4">Emergency Features</Badge>
-              <h2 className="text-4xl font-bold text-foreground mb-6">Instant Emergency Response</h2>
+              <h2 className="text-4xl font-bold text-foreground mb-6">Emergency Assistance Tools</h2>
               <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
-                When seconds matter, Local Guard Connect provides instant emergency features including panic buttons, 
-                automatic location sharing, and direct connection to emergency services.
+                CrimeX can queue an emergency record with your permission, capture location and private evidence, notify enabled trusted contacts, and keep official Cameroon numbers visible. A queued alert is not confirmation that an authority has received it.
               </p>
               <div className="space-y-4">
                 <div className="flex items-start space-x-3">
                   <Phone className="h-6 w-6 text-destructive mt-1" />
                   <div>
-                    <h4 className="font-semibold text-foreground">One-Touch Emergency Alert</h4>
-                    <p className="text-muted-foreground">Instantly alert authorities and emergency contacts</p>
+                    <h4 className="font-semibold text-foreground">Emergency Queue and Call Fallback</h4>
+                    <p className="text-muted-foreground">Queue details for connected responders and call the appropriate official number directly</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
                   <MapPin className="h-6 w-6 text-destructive mt-1" />
                   <div>
                     <h4 className="font-semibold text-foreground">Automatic Location Sharing</h4>
-                    <p className="text-muted-foreground">GPS coordinates sent automatically with alerts</p>
+                    <p className="text-muted-foreground">GPS coordinates are attached after you grant browser permission</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
                   <Camera className="h-6 w-6 text-destructive mt-1" />
                   <div>
                     <h4 className="font-semibold text-foreground">Auto-Recording</h4>
-                    <p className="text-muted-foreground">Automatic audio/video recording during emergencies</p>
+                    <p className="text-muted-foreground">Private recording starts only after camera and microphone permission</p>
                   </div>
                 </div>
               </div>
@@ -247,9 +303,11 @@ const Index = () => {
                 <AlertTriangle className="h-20 w-20 text-destructive mx-auto mb-6" />
                 <h3 className="text-2xl font-bold text-foreground mb-4">Emergency Mode</h3>
                 <p className="text-muted-foreground mb-6">Activate with a single touch when you need immediate help</p>
-                <Button size="lg" variant="destructive" className="w-full">
+                <Button asChild size="lg" variant="destructive" className="w-full">
+                  <a href="tel:117">
                   <Phone className="mr-2 h-5 w-5" />
-                  Emergency Alert
+                  Call Police 117
+                  </a>
                 </Button>
               </div>
             </div>
@@ -263,7 +321,7 @@ const Index = () => {
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-foreground mb-4">Building Safer Communities</h2>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              Join thousands of community members working together to create safer neighborhoods through technology and collaboration.
+              Share verified local information, follow reported cases, and work with participating safety organizations.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -272,7 +330,7 @@ const Index = () => {
                 <BarChart3 className="h-12 w-12 text-primary mx-auto mb-4" />
                 <CardTitle>Crime Analytics</CardTitle>
                 <CardDescription>
-                  View real-time statistics and trends to understand safety patterns in your area
+                  Authorized teams can review aggregate patterns from submitted reports by status, category, and region
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -290,7 +348,7 @@ const Index = () => {
                 <Shield className="h-12 w-12 text-primary mx-auto mb-4" />
                 <CardTitle>Authority Partnership</CardTitle>
                 <CardDescription>
-                  Direct integration with local law enforcement and emergency services
+                  Assign cases only to verified organizations configured for the relevant jurisdiction
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -304,15 +362,15 @@ const Index = () => {
           <div className="bg-gradient-to-r from-primary to-accent rounded-3xl p-12 text-center text-white">
             <h2 className="text-4xl font-bold mb-6">Ready to Make Your Community Safer?</h2>
             <p className="text-xl mb-8 opacity-90 max-w-2xl mx-auto">
-              Join Local Guard Connect today and be part of the solution. Together, we can build safer, 
+              Join CrimeX today and be part of the solution. Together, we can build safer, 
               more connected communities.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" className="bg-white text-primary hover:bg-white/90">
-                Download App
+              <Button size="lg" className="bg-white text-primary hover:bg-white/90" onClick={openReportPopup}>
+                Report an Incident
               </Button>
-              <Button size="lg" variant="outline" className="border-white text-white bg-white/10">
-                Learn More
+              <Button size="lg" variant="outline" className="border-white text-white bg-white/10" onClick={() => window.location.href = '/track'}>
+                Track a Report
               </Button>
             </div>
           </div>

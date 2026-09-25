@@ -1,0 +1,12 @@
+import { Router } from "express";
+import { createComment, createPost, listComments, listPosts, moderatePost, moderationQueue, reportPost } from "../controllers/communityPostController.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+const router = Router();
+router.get("/community/posts", listPosts);
+router.post("/community/posts", requireAuth, createPost);
+router.get("/community/moderation", requireAuth, requireRole("admin", "dispatcher"), moderationQueue);
+router.patch("/community/posts/:id/moderate", requireAuth, requireRole("admin", "dispatcher"), moderatePost);
+router.get("/community/posts/:id/comments", listComments);
+router.post("/community/posts/:id/comments", requireAuth, createComment);
+router.post("/community/posts/:id/report", requireAuth, reportPost);
+export default router;

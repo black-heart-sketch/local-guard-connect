@@ -3,7 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
 import 'leaflet-defaulticon-compatibility';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -36,6 +36,7 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
   selectedReports = [],
   onReportSelect 
 }) => {
+  const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] || character);
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup>(new L.LayerGroup());
@@ -120,8 +121,8 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
 
     // Initialize map
     map.current = L.map(mapContainer.current, {
-      center: [0.3476, 32.5825], // Default to Kampala, Uganda
-      zoom: 10,
+      center: [7.3697, 12.3547], // Cameroon national view
+      zoom: 6,
       zoomControl: true,
     });
 
@@ -137,7 +138,7 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
 
   const fetchReports = async () => {
     try {
-      const query = supabase
+      const query = api
         .from('reports')
         .select('*')
         .order('created_at', { ascending: false });
@@ -186,8 +187,8 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
 
   const getMarkerColor = (status: string) => {
     switch (status) {
-      case 'pending': return '#eab308'; // yellow
-      case 'in_progress': return '#3b82f6'; // blue
+      case 'received': return '#eab308'; // yellow
+      case 'assigned': return '#3b82f6'; // blue
       case 'resolved': return '#22c55e'; // green
       case 'rejected': return '#ef4444'; // red
       default: return '#6b7280'; // gray
@@ -205,7 +206,7 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
       const coords = typeof report.coordinates === 'string' 
         ? JSON.parse(report.coordinates) 
         : report.coordinates;
-      return coords && typeof coords.lat === 'number' && typeof coords.lng === 'number';
+      return coords && typeof (coords.lat ?? coords.latitude) === 'number' && typeof (coords.lng ?? coords.longitude) === 'number';
     });
 
     if (validReports.length === 0) return;
@@ -216,6 +217,8 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
         ? JSON.parse(report.coordinates) 
         : report.coordinates;
 
+      const latitude = coords.lat ?? coords.latitude;
+      const longitude = coords.lng ?? coords.longitude;
       const color = getMarkerColor(report.status);
       
       // Create custom marker icon
@@ -245,13 +248,13 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
         className: 'custom-marker'
       });
 
-      const marker = L.marker([coords.lat, coords.lng], { icon: markerIcon })
+      const marker = L.marker([latitude, longitude], { icon: markerIcon })
         .bindPopup(`
           <div class="p-2 min-w-[250px]">
             <div class="flex items-center gap-2 mb-2">
-              <h3 class="font-semibold text-sm">${report.crime_type}</h3>
+              <h3 class="font-semibold text-sm">${escapeHtml(report.crime_type)}</h3>
               <span class="px-2 py-1 rounded text-xs text-white" style="background-color: ${color}">
-                ${report.status.replace('_', ' ')}
+                ${escapeHtml(report.status.replace('_', ' '))}
               </span>
             </div>
             <div class="space-y-1 text-xs text-gray-600">
@@ -259,7 +262,7 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
                 <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
                 </svg>
-                ${report.location}
+                ${escapeHtml(report.location)}
               </div>
               <div class="flex items-center gap-1">
                 <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -268,7 +271,7 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
                 ${new Date(report.created_at).toLocaleDateString()}
               </div>
             </div>
-            <p class="text-xs mt-2 text-gray-700 line-clamp-3">${report.description}</p>
+            <p class="text-xs mt-2 text-gray-700 line-clamp-3">${escapeHtml(report.description)}</p>
             ${isAdmin ? `
               <button 
                 onclick="window.selectReport('${report.id}')"
@@ -362,8 +365,11 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="received">Received</SelectItem>
+                  <SelectItem value="triaged">Triaged</SelectItem>
+                  <SelectItem value="assigned">Assigned</SelectItem>
+                  <SelectItem value="dispatched">Dispatched</SelectItem>
+                  <SelectItem value="action_taken">Action taken</SelectItem>
                   <SelectItem value="resolved">Resolved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                 </SelectContent>
@@ -409,11 +415,11 @@ const CrimeMap: React.FC<CrimeMapProps> = ({
               <>
                 <div className="flex items-center gap-2 text-xs">
                   <div className="w-4 h-4 rounded-full bg-yellow-500"></div>
-                  <span>Pending</span>
+                  <span>Received</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <div className="w-4 h-4 rounded-full bg-blue-500"></div>
-                  <span>In Progress</span>
+                  <span>Assigned</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <div className="w-4 h-4 rounded-full bg-green-500"></div>

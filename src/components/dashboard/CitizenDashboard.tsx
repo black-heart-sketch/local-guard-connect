@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Database } from '@/types/supabase';
+import { Database } from '@/types/api';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +40,7 @@ export function CitizenDashboard() {
     coordinates?: { latitude: number; longitude: number };
   }) => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('reports')
         .insert({
           crime_type: reportData.crimeType,
@@ -67,7 +67,7 @@ export function CitizenDashboard() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('reports')
         .select('*')
         .eq('user_id', user.id)
@@ -88,9 +88,9 @@ export function CitizenDashboard() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
+      case 'received':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'in_progress':
+      case 'assigned':
         return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'resolved':
         return 'bg-green-100 text-green-800 border-green-200';
@@ -150,12 +150,12 @@ export function CitizenDashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending</CardTitle>
+              <CardTitle className="text-sm font-medium">Received</CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {reports.filter(r => r.status === 'pending').length}
+                {reports.filter(r => r.status === 'received').length}
               </div>
             </CardContent>
           </Card>

@@ -1,26 +1,33 @@
 import { useState, useRef, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, MapPin, FileText, AlertTriangle, X, Loader2, CheckCircle, User, UserCog, UserX, AlertCircle as AlertCircleIcon } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { apiFetch } from "@/lib/api";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { cameroonDivisions, cameroonRegions } from '@/data/cameroonLocations';
 
 const crimeTypes = [
-  "Theft",
-  "Vandalism", 
-  "Assault",
-  "Burglary",
-  "Robbery",
+  "Theft / Vol",
+  "Motorbike or vehicle theft / Vol de moto ou véhicule",
+  "Assault / Agression",
+  "Burglary / Cambriolage",
+  "Armed robbery / Braquage",
   "Suspicious Activity",
-  "Domestic Violence",
-  "Drug Activity",
-  "Fraud/Scam",
-  "Missing Person",
+  "Domestic or gender-based violence / VBG",
+  "Child protection / Protection de l'enfant",
+  "Road crash / Accident de circulation",
+  "Fire / Incendie",
+  "Medical emergency / Urgence médicale",
+  "Mobile Money or online fraud / Arnaque MoMo",
+  "Land or community conflict / Conflit foncier",
+  "Missing Person / Personne disparue",
+  "Infrastructure hazard / Danger public",
   "Other"
 ];
-
 interface ReportPopupProps {
   isOpen: boolean;
   onClose: () => void;
@@ -34,11 +41,16 @@ interface ReportPopupProps {
       latitude: number;
       longitude: number;
     };
-  }) => Promise<{ success: boolean }>;
+    jurisdiction?: { region?: string; division?: string; subdivision?: string; council?: string; quarter?: string; landmark?: string };
+    sensitive?: boolean;
+    contactPreference?: string;
+    safeContactTime?: string;
+  }) => Promise<{ success: boolean; queued?: boolean; recoveryCode?: string; reference?: string }>;
 }
 
 export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [crimeType, setCrimeType] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
@@ -49,6 +61,15 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
   const [showAnonymityPrompt, setShowAnonymityPrompt] = useState(false);
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [region, setRegion] = useState("");
+  const [quarter, setQuarter] = useState("");
+  const [landmark, setLandmark] = useState("");
+  const [division, setDivision] = useState("");
+  const [subdivision, setSubdivision] = useState("");
+  const [council, setCouncil] = useState("");
+  const [safeContactTime, setSafeContactTime] = useState("");
+  const [recoveryReceipt, setRecoveryReceipt] = useState<{ reference?: string; code: string } | null>(null);
+  const isSensitive = crimeType.includes('gender-based') || crimeType.includes('Child protection');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset form when modal is opened/closed
@@ -63,6 +84,13 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
         setCoordinates(null);
         setLocationStatus('idle');
         setSubmitError(null);
+        setRegion("");
+        setQuarter("");
+        setLandmark("");
+        setDivision("");
+        setSubdivision("");
+        setCouncil("");
+        setSafeContactTime("");
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -115,13 +143,18 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
         description,
         files,
         isAnonymous,
-        coordinates
+        coordinates,
+        jurisdiction: { region, division, subdivision, council, quarter, landmark },
+        sensitive: isSensitive,
+        contactPreference: isSensitive ? 'none' : 'app',
+        safeContactTime: isSensitive ? safeContactTime : undefined,
       });
 
       if (result.success) {
+        if (result.recoveryCode) setRecoveryReceipt({ reference: result.reference, code: result.recoveryCode });
         toast({
-          title: "Report Submitted",
-          description: isAnonymous 
+          title: result.queued ? "Saved for sending" : "Report Submitted",
+          description: result.queued ? "Your report is stored on this device and will be sent when connectivity returns." : isAnonymous 
             ? "Your anonymous report has been submitted successfully."
             : "Your report has been submitted successfully.",
           variant: "default",
@@ -171,11 +204,10 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
+        setCoordinates({ latitude, longitude });
         
         try {
-          // Simulate reverse geocoding (in real app, use Google Maps API, OpenStreetMap, etc.)
-          // For demo, we'll create a readable address
-          const readableAddress = await simulateReverseGeocode(latitude, longitude);
+          const readableAddress = await reverseGeocode(latitude, longitude);
           setLocation(readableAddress);
           setLocationStatus('success');
           
@@ -218,25 +250,9 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
     setIsGettingLocation(false);
   };
 
-  // Simulate reverse geocoding (replace with real API in production)
-  const simulateReverseGeocode = async (lat: number, lng: number): Promise<string> => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // This is a mock - in real app, use:
-    // - Google Maps Geocoding API
-    // - OpenStreetMap Nominatim
-    // - MapBox Geocoding API
-    
-    // Mock address based on Yaoundé coordinates (since you're in Cameroon)
-    const mockAddresses = [
-      "123 Avenue Kennedy, Yaoundé, Centre Region, Cameroon",
-      "456 Rue de la Réunification, Yaoundé, Centre Region, Cameroon", 
-      "789 Boulevard du 20 Mai, Yaoundé, Centre Region, Cameroon",
-      "321 Avenue Charles de Gaulle, Yaoundé, Centre Region, Cameroon"
-    ];
-    
-    return mockAddresses[Math.floor(Math.random() * mockAddresses.length)];
+  const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+    const result = await apiFetch<{ displayName?: string }>(`/geocode/reverse?lat=${lat}&lon=${lng}`);
+    return result.displayName || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
   };
 
   const getLocationButtonContent = () => {
@@ -244,7 +260,7 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
       return (
         <>
           <Loader2 className="h-3 w-3 animate-spin" />
-          Getting location...
+          {t('useLocation')}...
         </>
       );
     }
@@ -261,17 +277,20 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
     return (
       <>
         <MapPin className="h-3 w-3" />
-        Use my current location
+        {t('useLocation')}
       </>
     );
   };
 
   return (
     <>
+      <Dialog open={Boolean(recoveryReceipt)} onOpenChange={open => { if (!open) setRecoveryReceipt(null); }}>
+        <DialogContent><DialogHeader><DialogTitle>Save your anonymous tracking details</DialogTitle><DialogDescription>{recoveryReceipt?.reference ? 'This recovery code is shown once. CrimeX cannot restore it if you lose it.' : 'Save this code now. Your report reference will appear on the tracking page after the offline report synchronizes.'}</DialogDescription></DialogHeader><div className="rounded-lg border bg-muted p-4 font-mono text-sm"><div>{recoveryReceipt?.reference || 'Reference pending synchronization'}</div><div className="mt-2 break-all text-lg font-bold">{recoveryReceipt?.code}</div></div><Button type="button" onClick={() => navigator.clipboard?.writeText(`${recoveryReceipt?.reference || 'Pending sync'}\n${recoveryReceipt?.code}`)}>Copy tracking details</Button><Button type="button" variant="outline" onClick={() => setRecoveryReceipt(null)}>I saved it</Button></DialogContent>
+      </Dialog>
       {/* Anonymity Prompt Dialog */}
       <Dialog open={showAnonymityPrompt} onOpenChange={setShowAnonymityPrompt}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+      <DialogContent className="sm:max-w-4xl">
+      <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserCog className="h-5 w-5 text-blue-500" />
               Submit Report
@@ -281,53 +300,51 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Button
-                variant="outline"
-                className="w-full justify-start text-left p-6 h-auto"
-                onClick={() => confirmSubmit(false)}
-                disabled={isSubmitting}
-              >
-                <div className="flex items-center gap-3">
-                  <User className="h-5 w-5 text-blue-500" />
-                  <div>
-                    <p className="font-medium">Submit with my account</p>
-                    <p className="text-sm text-muted-foreground">
-                      Your name and contact information will be attached to the report.
-                    </p>
-                  </div>
+          <div className="grid gap-6 py-6">
+            <Button
+              variant="outline"
+              className="w-full justify-start text-left p-6 h-auto"
+              onClick={() => confirmSubmit(false)}
+              disabled={isSubmitting}
+            >
+              <div className="flex items-start gap-4">
+                <User className="h-5 w-5 text-blue-500 flex-shrink-0 mt-1" />
+                <div className="flex-1">
+                  <p className="font-medium">{t('identified')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Your name and contact information will be attached to the report.
+                  </p>
                 </div>
-              </Button>
-              
-              <Button
-                variant="outline"
-                className="w-full justify-start text-left p-6 h-auto"
-                onClick={() => confirmSubmit(true)}
-                disabled={isSubmitting}
-              >
-                <div className="flex items-center gap-3">
-                  <UserX className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">Submit anonymously</p>
-                    <p className="text-sm text-muted-foreground">
-                      Your identity will not be shared with authorities.
-                    </p>
-                  </div>
-                </div>
-              </Button>
-            </div>
+              </div>
+            </Button>
             
-            <div className="flex justify-end gap-2 pt-2">
-              <Button 
-                variant="outline" 
-                onClick={cancelSubmit}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              className="w-full justify-start text-left p-6 h-auto"
+              onClick={() => confirmSubmit(true)}
+              disabled={isSubmitting}
+            >
+              <div className="flex items-start gap-4">
+                <UserX className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
+                <div className="flex-1">
+                  <p className="font-medium">{t('anonymous')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Your identity will not be shared with authorities.
+                  </p>
+                </div>
+              </div>
+            </Button>
           </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={cancelSubmit}
+              disabled={isSubmitting}
+              className="w-full sm:w-auto"
+            >
+              {t('cancel')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -337,18 +354,26 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-red-500" />
-            File a Crime Report
+            {t('reportTitle')}
           </DialogTitle>
           <DialogDescription>
-            Provide details about the incident. All information will be kept confidential and secure.
+            {t('reportDescription')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {isSensitive && (
+            <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-950">
+              <div className="flex items-center justify-between gap-3">
+                <span>This protected report will never appear on the public map.</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => window.location.replace('https://www.google.com')}>Quick exit</Button>
+              </div>
+            </div>
+          )}
           {/* Crime Type */}
           <div className="space-y-2">
             <Label htmlFor="crimeType" className="text-sm font-medium">
-              Type of Incident *
+              {t('incidentType')} *
             </Label>
             <select
               id="crimeType"
@@ -357,7 +382,7 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
               required
             >
-              <option value="">Select incident type</option>
+              <option value="">{t('selectType')}</option>
               {crimeTypes.map((type) => (
                 <option key={type} value={type}>
                   {type}
@@ -368,9 +393,23 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
 
           {/* Location */}
           <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <select value={region} onChange={event => { setRegion(event.target.value); setDivision(''); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm" required>
+                <option value="">Region *</option>
+                {cameroonRegions.map(item => <option key={item} value={item}>{item}</option>)}
+              </select>
+              <select value={division} onChange={event => setDivision(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm" disabled={!region} required>
+                <option value="">Division / Département *</option>
+                {(cameroonDivisions[region] || []).map(item => <option key={item} value={item}>{item}</option>)}
+              </select>
+              <Input value={subdivision} onChange={event => setSubdivision(event.target.value)} placeholder="Subdivision / Arrondissement" />
+              <Input value={council} onChange={event => setCouncil(event.target.value)} placeholder="Council / Commune" />
+              <Input value={quarter} onChange={event => setQuarter(event.target.value)} placeholder="Quarter / village" />
+              <Input value={landmark} onChange={event => setLandmark(event.target.value)} placeholder="Nearest landmark" />
+            </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="location" className="text-sm font-medium">
-                Location *
+                {t('location')} *
               </Label>
               <Button
                 type="button"
@@ -387,7 +426,7 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
             </div>
             <Input
               id="location"
-              placeholder="Enter location, address, or landmark"
+              placeholder={t('location')}
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               className="transition-colors focus:ring-2 focus:ring-primary"
@@ -401,10 +440,17 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
             )}
           </div>
 
+          {isSensitive && (
+            <div className="space-y-2">
+              <Label htmlFor="safeContactTime">Safe time or method to contact you (optional)</Label>
+              <Input id="safeContactTime" value={safeContactTime} onChange={event => setSafeContactTime(event.target.value)} placeholder="Example: app only, weekdays after 18:00" />
+            </div>
+          )}
+
           {/* Description */}
           <div className="space-y-2">
             <Label htmlFor="description" className="text-sm font-medium">
-              Description *
+              {t('description')} *
             </Label>
             <Textarea
               id="description"
@@ -423,7 +469,7 @@ export const ReportPopup = ({ isOpen, onClose, onSubmit }: ReportPopupProps) => 
           {/* File Upload */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              Attachments (Photos/Videos/Audio)
+              {t('attachments')}
             </Label>
             <div className="flex flex-col gap-3">
               {files.length > 0 && (

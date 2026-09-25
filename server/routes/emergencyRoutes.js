@@ -1,0 +1,14 @@
+import { Router } from "express";
+import { createEmergency, deleteEmergency, listEmergencies, readRecording, streamRecording, updateEmergencyStatus, uploadChunk } from "../controllers/emergencyController.js";
+import { operationalRoles, requireAuth, requireRole } from "../middleware/auth.js";
+import { upload, uploadKind } from "../middleware/upload.js";
+const router = Router();
+router.post("/emergencies", createEmergency);
+router.post("/emergencies/:session/chunks", uploadKind("emergency"), upload.single("chunk"), uploadChunk);
+router.post("/emergencies/:session/stream", streamRecording);
+router.patch("/emergencies/:id/status", requireRole(...operationalRoles), updateEmergencyStatus);
+router.get("/emergencies", requireAuth, listEmergencies);
+router.delete("/emergencies/:id", requireRole("admin", "dispatcher"), deleteEmergency);
+router.get("/emergencies/:id/recording", requireAuth, readRecording);
+router.get("/emergencies/:id/recording/:chunkId", requireAuth, readRecording);
+export default router;

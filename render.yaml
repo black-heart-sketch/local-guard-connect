@@ -3,17 +3,30 @@ services:
     name: local-guard-connect
     env: node
     buildCommand: npm install --production=false && npm run build
-    staticPublishPath: ./dist
-    startCommand: npm run preview
+    startCommand: npm run server
     envVars:
-      - key: VITE_SUPABASE_URL
+      - key: MONGODB_URI
         sync: false
-        value: ${VITE_SUPABASE_URL}
-      - key: VITE_SUPABASE_ANON_KEY
+      - key: JWT_SECRET
         sync: false
-        value: ${VITE_SUPABASE_ANON_KEY}
+      - key: CLIENT_ORIGIN
+        value: https://local-guard-connect.onrender.com
       - key: NODE_ENV
         value: production
+      - key: PUBLIC_API_URL
+        value: https://local-guard-connect.onrender.com
+      - key: DIGIPAY_API_KEY
+        sync: false
+      - key: DIGIPAY_ENVIRONMENT
+        value: production
+      - key: PAYMENT_WEBHOOK_SECRET
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
     plan: free
-    healthCheckPath: /
+    healthCheckPath: /api/health
     autoDeploy: true

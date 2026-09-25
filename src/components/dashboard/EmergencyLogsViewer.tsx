@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useState, useEffect } from 'react';
+import { api, apiBlob } from "@/lib/api";
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,14 +7,19 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, Play, Download, MapPin, Calendar, Filter, Eye, AlertTriangle, User } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Search, Play, Download, MapPin, Calendar, Filter, Eye, AlertTriangle, User, Trash2, Edit, Check, X, MoreVertical } from 'lucide-react';
+
+type EmergencyStatus = 'queued' | 'acknowledged' | 'dispatched' | 'completed' | 'failed' | 'cancelled';
+type EmergencyType = 'general' | 'medical' | 'fire' | 'police';
 
 interface EmergencyLog {
   id: string;
   user_id: string;
   emergency_type: string;
-  status: string;
+  status: EmergencyStatus;
   location_data: any;
   video_path: string | null;
   recording_session_id: string | null;
@@ -28,7 +33,7 @@ interface EmergencyLog {
   };
 }
 
-export function EmergencyLogsViewer() {
+export const EmergencyLogsViewer = () => {
   const { profile } = useAuth();
   const { toast } = useToast();
   const [logs, setLogs] = useState<EmergencyLog[]>([]);
@@ -39,6 +44,14 @@ export function EmergencyLogsViewer() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [emergencyTypeFilter, setEmergencyTypeFilter] = useState('all');
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [logToDelete, setLogToDelete] = useState<EmergencyLog | null>(null);
+  const [statusUpdateOpen, setStatusUpdateOpen] = useState(false);
+  const [logToUpdate, setLogToUpdate] = useState<EmergencyLog | null>(null);
+  const [newStatus, setNewStatus] = useState<EmergencyStatus | ''>('');
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const statusOptions: EmergencyStatus[] = ['queued', 'acknowledged', 'dispatched', 'completed', 'failed', 'cancelled'];
 
   useEffect(() => {
     fetchEmergencyLogs();
@@ -50,7 +63,7 @@ export function EmergencyLogsViewer() {
 
   const fetchEmergencyLogs = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('emergency_logs')
         .select('*')
         .order('created_at', { ascending: false });
@@ -59,7 +72,7 @@ export function EmergencyLogsViewer() {
 
       // Fetch user profiles separately
       const userIds = [...new Set((data as any[])?.map((log: any) => log.user_id))];
-      const { data: profiles } = await supabase
+      const { data: profiles } = await api
         .from('profiles')
         .select('user_id, full_name, phone')
         .in('user_id', userIds);
@@ -114,11 +127,99 @@ export function EmergencyLogsViewer() {
     setIsDetailModalOpen(false);
   };
 
+  const handleDeleteLog = async () => {
+    if (!logToDelete) return;
+
+    setActionLoading(true);
+    try {
+      // Delete the log from database
+      const { error } = await api
+        .from('emergency_logs')
+        .delete()
+        .eq('id', logToDelete.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setLogs(prevLogs => prevLogs.filter(log => log.id !== logToDelete.id));
+      
+      toast({
+        title: 'Success',
+        description: 'Emergency log deleted successfully',
+      });
+
+      setDeleteConfirmOpen(false);
+      setLogToDelete(null);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete emergency log',
+        variant: 'destructive',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!logToUpdate || !newStatus) return;
+
+    setActionLoading(true);
+    try {
+      const { error } = await api
+        .from('emergency_logs')
+        .update({ 
+          status: newStatus as EmergencyStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', logToUpdate.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setLogs(prevLogs => 
+        prevLogs.map(log => 
+          log.id === logToUpdate.id 
+            ? { ...log, status: newStatus as EmergencyStatus, updated_at: new Date().toISOString() }
+            : log
+        )
+      );
+
+      toast({
+        title: 'Success',
+        description: 'Status updated successfully',
+      });
+
+      setStatusUpdateOpen(false);
+      setLogToUpdate(null);
+      setNewStatus('');
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update status',
+        variant: 'destructive',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openDeleteConfirm = (log: EmergencyLog) => {
+    setLogToDelete(log);
+    setDeleteConfirmOpen(true);
+  };
+
+  const openStatusUpdate = (log: EmergencyLog) => {
+    setLogToUpdate(log);
+    setNewStatus(log.status);
+    setStatusUpdateOpen(true);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'received':
+      case 'queued':
         return 'bg-green-100 text-green-800 border-green-200';
-      case 'processing':
+      case 'acknowledged':
         return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'completed':
         return 'bg-purple-100 text-purple-800 border-purple-200';
@@ -170,12 +271,7 @@ export function EmergencyLogsViewer() {
     if (!videoPath) return;
     
     try {
-      const { data, error } = await supabase.storage
-        .from('emergency-videos')
-        .download(videoPath);
-
-      if (error) throw error;
-
+      const data = await apiBlob(videoPath);
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
       a.href = url;
@@ -195,8 +291,8 @@ export function EmergencyLogsViewer() {
 
   const stats = {
     total: logs.length,
-    received: logs.filter(l => l.status === 'received').length,
-    processing: logs.filter(l => l.status === 'processing').length,
+    received: logs.filter(l => l.status === 'queued').length,
+    processing: logs.filter(l => l.status === 'acknowledged').length,
     completed: logs.filter(l => l.status === 'completed').length,
   };
 
@@ -222,7 +318,7 @@ export function EmergencyLogsViewer() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Received</CardTitle>
+            <CardTitle className="text-sm font-medium">Queued</CardTitle>
             <Play className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -232,7 +328,7 @@ export function EmergencyLogsViewer() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Processing</CardTitle>
+            <CardTitle className="text-sm font-medium">Acknowledged</CardTitle>
             <Play className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -277,10 +373,12 @@ export function EmergencyLogsViewer() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="received">Received</SelectItem>
-                <SelectItem value="processing">Processing</SelectItem>
+                <SelectItem value="queued">Queued</SelectItem>
+                <SelectItem value="acknowledged">Acknowledged</SelectItem>
+                <SelectItem value="dispatched">Dispatched</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="failed">Failed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
 
@@ -373,7 +471,6 @@ export function EmergencyLogsViewer() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
                           openLogDetails(log);
@@ -385,7 +482,6 @@ export function EmergencyLogsViewer() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={(e) => {
                             e.stopPropagation();
                             downloadVideo(log.video_path!);
@@ -394,6 +490,28 @@ export function EmergencyLogsViewer() {
                           <Download className="w-4 h-4" />
                         </Button>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openStatusUpdate(log);
+                        }}
+                      >
+                        <Edit className="w-4 h-4 mr-1" />
+                        Update
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openDeleteConfirm(log);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete
+                      </Button>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-4 text-sm">
@@ -440,6 +558,7 @@ export function EmergencyLogsViewer() {
                     <div><span className="text-muted-foreground">Status:</span> {selectedLog.status}</div>
                     <div><span className="text-muted-foreground">Session ID:</span> {selectedLog.recording_session_id || 'N/A'}</div>
                     <div><span className="text-muted-foreground">Recorded:</span> {formatDate(selectedLog.created_at)}</div>
+                    <div><span className="text-muted-foreground">Updated:</span> {formatDate(selectedLog.updated_at)}</div>
                   </div>
                 </div>
                 
@@ -462,10 +581,18 @@ export function EmergencyLogsViewer() {
                     <div><span className="text-muted-foreground">Size:</span> {formatFileSize(selectedLog.chunk_size || 0)}</div>
                     <div><span className="text-muted-foreground">Path:</span> {selectedLog.video_path}</div>
                   </div>
-                  <div className="mt-4">
+                  <div className="mt-4 flex gap-2">
                     <Button onClick={() => downloadVideo(selectedLog.video_path!)}>
                       <Download className="w-4 h-4 mr-2" />
                       Download Video
+                    </Button>
+                    <Button variant="outline" onClick={() => openStatusUpdate(selectedLog)}>
+                      <Edit className="w-4 h-4 mr-2" />
+                      Update Status
+                    </Button>
+                    <Button variant="destructive" onClick={() => openDeleteConfirm(selectedLog)}>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Log
                     </Button>
                   </div>
                 </div>
@@ -484,6 +611,77 @@ export function EmergencyLogsViewer() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the emergency log
+              {logToDelete?.video_path && ' and its associated video file'}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteLog}
+              disabled={actionLoading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {actionLoading ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Status Update Dialog */}
+      <Dialog open={statusUpdateOpen} onOpenChange={setStatusUpdateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Status</DialogTitle>
+            <DialogDescription>
+              Change the status of this emergency log
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Current Status: {logToUpdate?.status}</label>
+            </div>
+            <Select value={newStatus} onValueChange={(value) => setNewStatus(value as EmergencyStatus)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select new status" />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    <div className="flex items-center gap-2">
+                      <Badge className={getStatusColor(status)} variant="outline">
+                        {status}
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setStatusUpdateOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateStatus}
+              disabled={actionLoading || !newStatus || newStatus === logToUpdate?.status}
+            >
+              {actionLoading ? 'Updating...' : 'Update Status'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
+};
+export default EmergencyLogsViewer;

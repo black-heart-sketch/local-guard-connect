@@ -1,0 +1,11 @@
+import { Router } from "express";
+import { createPayment, createPayout, listPayments, merchantBalance, paymentWebhook, refreshPaymentStatus } from "../controllers/paymentController.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+const router = Router();
+router.post("/payments", requireAuth, createPayment);
+router.get("/payments", requireAuth, listPayments);
+router.get("/payments/admin/balance", requireAuth, requireRole("admin"), merchantBalance);
+router.post("/payments/admin/payouts", requireAuth, requireRole("admin"), createPayout);
+router.get("/payments/:reference/status", requireAuth, refreshPaymentStatus);
+router.post("/payments/webhook", paymentWebhook);
+export default router;

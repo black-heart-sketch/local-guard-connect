@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Database } from '@/types/supabase';
+import { Database } from '@/types/api';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,11 +10,13 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, FileText, Clock, CheckCircle, XCircle, MapPin, Calendar, Filter, Eye, Download, X, User, Mail, MessageSquare, Image, File, ExternalLink, Map, Users, Bell, AlertTriangle } from 'lucide-react';
+import { Search, FileText, Clock, CheckCircle, XCircle, MapPin, Calendar, Filter, Eye, Download, X, User, Mail, MessageSquare, Image, File, ExternalLink, Map, Users, Bell, AlertTriangle, Building2, MessagesSquare } from 'lucide-react';
 import { UserManagement } from './UserManagement';
 import { NotificationManagement } from './NotificationManagement';
 import { EmergencyLogsViewer } from './EmergencyLogsViewer';
 import { Header } from '@/components/layout/Header';
+import { AgencyManagement } from './AgencyManagement';
+import { CommunityModeration } from './CommunityModeration';
 
 interface Report {
   id: string;
@@ -38,6 +40,8 @@ interface FileAttachment {
   path?: string;
 }
 
+interface AgencyOption { id: string; name: string; type: string; verified: boolean }
+
 export function AdminDashboard() {
   const { profile } = useAuth();
   const { toast } = useToast();
@@ -50,9 +54,11 @@ export function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [crimeTypeFilter, setCrimeTypeFilter] = useState('all');
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [agencies, setAgencies] = useState<AgencyOption[]>([]);
 
   useEffect(() => {
     fetchAllReports();
+    apiFetch<AgencyOption[]>('/agencies').then(setAgencies).catch(() => setAgencies([]));
   }, []);
 
   useEffect(() => {
@@ -61,7 +67,7 @@ export function AdminDashboard() {
 
   const fetchAllReports = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('reports')
         .select('*')
         .order('created_at', { ascending: false });
@@ -103,10 +109,10 @@ export function AdminDashboard() {
 
   const updateReportStatus = async (reportId: string, newStatus: string) => {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await (api as any)
         .from('reports')
         .update({ 
-          status: newStatus as 'pending' | 'in_progress' | 'resolved' | 'rejected',
+          status: newStatus as 'received' | 'assigned' | 'resolved' | 'rejected',
           updated_at: new Date().toISOString() 
         })
         .eq('id', reportId);
@@ -135,6 +141,16 @@ export function AdminDashboard() {
     }
   };
 
+  const assignAgency = async (agencyId: string) => {
+    if (!selectedReport) return;
+    try {
+      const updated = await apiFetch<Report>(`/reports/${selectedReport.id}/assign`, { method: 'PATCH', body: JSON.stringify({ agencyId, note: 'Assigned from operations dashboard' }) });
+      setReports(current => current.map(report => report.id === updated.id ? { ...report, ...updated } : report));
+      setSelectedReport(updated);
+      toast({ title: 'Case assigned', description: 'The verified partner can now act on this case.' });
+    } catch (error) { toast({ title: 'Assignment failed', description: error instanceof Error ? error.message : 'Try again', variant: 'destructive' }); }
+  };
+
   const openReportDetails = (report: Report) => {
     setSelectedReport(report);
     setIsDetailModalOpen(true);
@@ -147,9 +163,9 @@ export function AdminDashboard() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
+      case 'received':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'in_progress':
+      case 'assigned':
         return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'resolved':
         return 'bg-green-100 text-green-800 border-green-200';
@@ -187,12 +203,41 @@ export function AdminDashboard() {
     return <File className="w-4 h-4" />;
   };
 
+  const canManageUsers = profile?.role === 'admin';
+
   const stats = {
     total: reports.length,
-    pending: reports.filter(r => r.status === 'pending').length,
-    inProgress: reports.filter(r => r.status === 'in_progress').length,
+    pending: reports.filter(r => r.status === 'received').length,
+    inProgress: reports.filter(r => r.status === 'assigned').length,
     resolved: reports.filter(r => r.status === 'resolved').length,
   };
+
+  // Wait for profile to load and check permissions
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // if (!canManageUsers) {
+  //   return (
+  //     <div className="min-h-screen bg-background flex items-center justify-center">
+  //       <div className="text-center p-8">
+  //         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+  //           <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  //             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+  //           </svg>
+  //         </div>
+  //         <h2 className="text-xl font-semibold text-foreground mb-2">Access Denied</h2>
+  //         <p className="text-muted-foreground">
+  //           You don't have permission to access the Admin Dashboard. Admin access required.
+  //         </p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return (
     <div className="min-h-screen bg-background">
@@ -217,15 +262,17 @@ export function AdminDashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs defaultValue="reports" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-6">
             <TabsTrigger value="reports" className="flex items-center gap-2">
               <FileText className="w-4 h-4" />
               Crime Reports
             </TabsTrigger>
+            {profile?.role === 'admin' && (
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               User Management
             </TabsTrigger>
+            )}
             <TabsTrigger value="notifications" className="flex items-center gap-2">
               <Bell className="w-4 h-4" />
               Notifications
@@ -234,6 +281,8 @@ export function AdminDashboard() {
               <AlertTriangle className="w-4 h-4" />
               Emergency Logs
             </TabsTrigger>
+            {profile?.role === 'admin' && <TabsTrigger value="agencies" className="flex items-center gap-2"><Building2 className="w-4 h-4" />Partners</TabsTrigger>}
+            {['admin', 'dispatcher'].includes(profile?.role || '') && <TabsTrigger value="moderation" className="flex items-center gap-2"><MessagesSquare className="w-4 h-4" />Moderation</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="reports" className="space-y-6">
@@ -251,7 +300,7 @@ export function AdminDashboard() {
 
           <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending</CardTitle>
+              <CardTitle className="text-sm font-medium">Received</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -261,7 +310,7 @@ export function AdminDashboard() {
 
           <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+              <CardTitle className="text-sm font-medium">Assigned</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -315,8 +364,11 @@ export function AdminDashboard() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="received">Received</SelectItem>
+                  <SelectItem value="triaged">Triaged</SelectItem>
+                  <SelectItem value="assigned">Assigned</SelectItem>
+                  <SelectItem value="dispatched">Dispatched</SelectItem>
+                  <SelectItem value="action_taken">Action taken</SelectItem>
                   <SelectItem value="resolved">Resolved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                 </SelectContent>
@@ -426,8 +478,11 @@ export function AdminDashboard() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="in_progress">In Progress</SelectItem>
+                            <SelectItem value="received">Received</SelectItem>
+                            <SelectItem value="triaged">Triaged</SelectItem>
+                            <SelectItem value="assigned">Assigned</SelectItem>
+                            <SelectItem value="dispatched">Dispatched</SelectItem>
+                            <SelectItem value="action_taken">Action taken</SelectItem>
                             <SelectItem value="resolved">Resolved</SelectItem>
                             <SelectItem value="rejected">Rejected</SelectItem>
                           </SelectContent>
@@ -461,6 +516,8 @@ export function AdminDashboard() {
           <TabsContent value="emergencies">
             <EmergencyLogsViewer />
           </TabsContent>
+          {profile?.role === 'admin' && <TabsContent value="agencies"><AgencyManagement /></TabsContent>}
+          {['admin', 'dispatcher'].includes(profile?.role || '') && <TabsContent value="moderation"><CommunityModeration /></TabsContent>}
         </Tabs>
       </main>
 
@@ -657,7 +714,14 @@ export function AdminDashboard() {
                     <CardTitle className="text-lg">Status Management</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex items-center gap-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Assign verified partner</label>
+                        <Select onValueChange={assignAgency}>
+                          <SelectTrigger className="mt-1"><SelectValue placeholder="Choose agency or council" /></SelectTrigger>
+                          <SelectContent>{agencies.filter(agency => agency.verified).map(agency => <SelectItem key={agency.id} value={agency.id}>{agency.name} · {agency.type}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
                       <div className="flex-1">
                         <label className="text-sm font-medium text-muted-foreground">Update Status</label>
                         <Select
@@ -668,18 +732,21 @@ export function AdminDashboard() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="pending">
+                            <SelectItem value="received">
                               <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-yellow-600" />
                                 Pending
                               </div>
                             </SelectItem>
-                            <SelectItem value="in_progress">
+                            <SelectItem value="triaged">Triaged</SelectItem>
+                            <SelectItem value="assigned">
                               <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-blue-600" />
                                 In Progress
                               </div>
                             </SelectItem>
+                            <SelectItem value="dispatched">Dispatched</SelectItem>
+                            <SelectItem value="action_taken">Action taken</SelectItem>
                             <SelectItem value="resolved">
                               <div className="flex items-center gap-2">
                                 <CheckCircle className="w-4 h-4 text-green-600" />

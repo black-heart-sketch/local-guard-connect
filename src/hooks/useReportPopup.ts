@@ -1,8 +1,7 @@
-import { useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from './useAuth';
-import type { Database, Json } from '@/types/supabase';
+import { useEffect, useState } from 'react';
+import { apiFetch } from "@/lib/api";
+import { flushQueuedReports, queueReport, reportFormData } from '@/lib/offlineReports';
+import { compressEvidence } from '@/lib/compressImage';
 
 export interface ReportData {
   crimeType: string;
@@ -16,15 +15,23 @@ export interface ReportData {
     latitude: number;
     longitude: number;
   };
+  jurisdiction?: { region?: string; division?: string; subdivision?: string; council?: string; quarter?: string; landmark?: string };
+  sensitive?: boolean;
+  contactPreference?: string;
+  safeContactTime?: string;
 }
-
-type ReportInsert = Database['public']['Tables']['reports']['Insert'];
 
 export const useReportPopup = () => {
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const { user } = useAuth();
+
+  useEffect(() => {
+    const flush = () => void flushQueuedReports();
+    window.addEventListener('online', flush);
+    flush();
+    return () => window.removeEventListener('online', flush);
+  }, []);
 
   const openReportPopup = () => {
     setSubmitError(null);
@@ -35,69 +42,27 @@ export const useReportPopup = () => {
     setIsReportOpen(false);
   };
 
-  const uploadFile = async (file: File) => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${uuidv4()}.${fileExt}`;
-    const filePath = `reports/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('report-attachments')
-      .upload(filePath, file);
-
-    if (uploadError) throw uploadError;
-
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('report-attachments')
-      .getPublicUrl(filePath);
-
-    return {
-      url: publicUrl,
-      name: file.name,
-      type: file.type,
-      size: file.size
-    };
-  };
-
   const handleReportSubmit = async (report: ReportData) => {
     setIsSubmitting(true);
     setSubmitError(null);
     
     try {
-      // Upload files if any
-      const attachments = [];
-      for (const file of report.files) {
-        try {
-          const uploadedFile = await uploadFile(file);
-          attachments.push(uploadedFile);
-        } catch (error) {
-          console.error('Error uploading file:', error);
-          // Continue with other files even if one fails
-        }
+      const optimizedReport = { ...report, files: await compressEvidence(report.files) };
+      if (!navigator.onLine) {
+        const queued = await queueReport(optimizedReport);
+        return { success: true, queued: true, recoveryCode: queued.recoveryCode };
       }
-
-      // Create the report data with proper typing
-      const reportInsert: ReportInsert = {
-        crime_type: report.crimeType,
-        location: report.location,
-        description: report.description,
-        attachments: attachments as Json, // Properly typed for Json
-        is_anonymous: report.isAnonymous,
-        user_id: report.isAnonymous ? null : (user?.id || null),
-        user_email: report.isAnonymous ? null : (user?.email || null),
-        coordinates: report.coordinates ? (report.coordinates as Json) : null,
-        status: 'pending' as const, // Ensure literal type
-      };
-
-      // Insert report into database with explicit typing
-      const { error } = await supabase
-        .from('reports')
-        .insert(reportInsert as any);
-
-      if (error) throw error;
-
-      return { success: true };
+      const result = await apiFetch<{ report: { reference?: string }; recoveryCode?: string }>('/reports', { method: 'POST', body: reportFormData(optimizedReport) });
+      if (result.recoveryCode) {
+        sessionStorage.setItem('lastAnonymousRecoveryCode', result.recoveryCode);
+        sessionStorage.setItem('lastAnonymousReference', result.report.reference || '');
+      }
+      return { success: true, recoveryCode: result.recoveryCode, reference: result.report.reference };
     } catch (error) {
+      if (error instanceof TypeError || (error as { status?: number }).status === undefined) {
+        const queued = await queueReport({ ...report, files: await compressEvidence(report.files) });
+        return { success: true, queued: true, recoveryCode: queued.recoveryCode };
+      }
       console.error('Error submitting report:', error);
       setSubmitError(error instanceof Error ? error.message : 'Failed to submit report');
       throw error;

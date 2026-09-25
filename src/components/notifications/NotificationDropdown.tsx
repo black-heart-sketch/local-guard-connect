@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -36,7 +36,7 @@ export const NotificationDropdown = () => {
     if (!user) return;
 
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await (api as any)
         .from('notifications')
         .select('*')
         .or(`type.eq.general,and(type.eq.registered,target_user_id.is.null),and(type.eq.targeted,target_user_id.eq.${user.id})`)
@@ -59,7 +59,7 @@ export const NotificationDropdown = () => {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await (api as any)
         .from('notifications')
         .update({ is_read: true })
         .eq('id', notificationId);
@@ -90,7 +90,7 @@ export const NotificationDropdown = () => {
       
       if (unreadIds.length === 0) return;
 
-      const { error } = await (supabase as any)
+      const { error } = await (api as any)
         .from('notifications')
         .update({ is_read: true })
         .in('id', unreadIds);
@@ -148,28 +148,13 @@ export const NotificationDropdown = () => {
     }
   }, [user]);
 
-  // Set up real-time subscription for new notifications
+  // Polling keeps alerts reliable across low-bandwidth mobile networks without a websocket dependency.
   useEffect(() => {
     if (!user) return;
-
-    const channel = supabase
-      .channel('notifications')
-      .on('postgres_changes', 
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'notifications',
-          filter: `type=eq.general,type=eq.registered,target_user_id=eq.${user.id}`
-        }, 
-        () => {
-          fetchNotifications();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const interval = window.setInterval(fetchNotifications, 30_000);
+    const refresh = () => document.visibilityState === 'visible' && fetchNotifications();
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', refresh); };
   }, [user]);
 
   if (!user) return null;

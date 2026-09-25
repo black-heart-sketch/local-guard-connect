@@ -1,0 +1,282 @@
+- generic:
+  - generic:
+    - list
+    - region "Notifications alt+T"
+    - generic [aria-hidden]:
+      - banner:
+        - generic: "🚨 Emergency: Police 117 · Gendarmerie 113 · Fire 118 · SAMU 119"
+        - generic:
+          - generic:
+            - link:
+              - /url: /
+              - generic:
+                - generic:
+                  - text: CrimeX
+                  - generic: Cameroon safety network
+            - navigation:
+              - button:
+                - generic: Features
+              - button:
+                - generic: How it works
+              - link:
+                - /url: /community
+                - generic: Community
+              - link:
+                - /url: /partners
+                - generic: Partners
+              - link:
+                - /url: /track
+                - generic: Track report
+              - button:
+                - generic: Emergency
+            - generic:
+              - button: Français
+              - generic:
+                - link:
+                  - /url: /auth
+                  - button: Sign in
+                - link:
+                  - /url: /auth
+                  - button: Get started
+      - generic:
+        - generic:
+          - generic:
+            - generic: 🛡️ Protecting Communities Together
+            - heading [level=1]: Your Safety is Our Priority
+            - paragraph: Report crimes, stay informed, and build safer communities with our comprehensive crime reporting platform. Anonymous reporting, offline queuing, local safety notices, and official emergency call options—all in one place.
+            - generic:
+              - button: Report Now
+              - button: View Crime Map
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic: EN / FR
+              - generic: Bilingual Access
+            - generic:
+              - generic: Offline
+              - generic: Queued Reporting
+            - generic:
+              - generic: "10"
+              - generic: Cameroon Regions
+            - generic:
+              - generic: Private
+              - generic: Sensitive Evidence
+      - generic:
+        - generic:
+          - generic:
+            - heading [level=2]: Comprehensive Safety Features
+            - paragraph: Every feature designed with your safety and privacy in mind
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - heading [level=3]: Quick Crime Reporting
+              - generic:
+                - paragraph: Submit detailed crime reports with multimedia evidence in seconds
+            - generic:
+              - generic:
+                - generic:
+                  - heading [level=3]: Privacy-Aware Incident Map
+              - generic:
+                - paragraph: View delayed, resolved, non-sensitive incidents with approximate locations
+            - generic:
+              - generic:
+                - generic:
+                  - heading [level=3]: Emergency Panic Button
+              - generic:
+                - paragraph: Queue GPS and private evidence for dispatch, with official call fallbacks
+            - generic:
+              - generic:
+                - generic:
+                  - heading [level=3]: Anonymous Reporting
+              - generic:
+                - paragraph: Report crimes safely without revealing your identity
+            - generic:
+              - generic:
+                - generic:
+                  - heading [level=3]: GBV Support Module
+              - generic:
+                - paragraph: Protected reporting for gender-based violence with controlled referral workflows
+            - generic:
+              - generic:
+                - generic:
+                  - heading [level=3]: Verified Safety Partners
+              - generic:
+                - paragraph: Connect reports to approved agencies, councils, NGOs, and community groups
+            - generic:
+              - generic:
+                - generic:
+                  - heading [level=3]: Private Evidence Vault
+              - generic:
+                - paragraph: Evidence is access-controlled and separated from the public safety map
+            - generic:
+              - generic:
+                - generic:
+                  - heading [level=3]: Bilingual Access
+              - generic:
+                - paragraph: Use core reporting and safety flows in English or French
+      - generic:
+        - generic:
+          - generic:
+            - heading [level=2]: How CrimeX Works
+            - paragraph: Clear, privacy-conscious reporting in three steps
+          - generic:
+            - generic:
+              - heading [level=3]: 1. Report
+              - paragraph: Submit detailed crime reports with photos, videos, and location data. Choose anonymous or identified reporting.
+            - generic:
+              - heading [level=3]: 2. Verify
+              - paragraph: Authorized operators triage reports and can assign them to a verified partner where an operational agreement exists.
+            - generic:
+              - heading [level=3]: 3. Act
+              - paragraph: Follow your case status and receive updates. Connected responders record acknowledgement and action in the case timeline.
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic: Emergency Features
+              - heading [level=2]: Emergency Assistance Tools
+              - paragraph: CrimeX can queue an emergency record with your permission, capture location and private evidence, notify enabled trusted contacts, and keep official Cameroon numbers visible. A queued alert is not confirmation that an authority has received it.
+              - generic:
+                - generic:
+                  - generic:
+                    - heading [level=4]: Emergency Queue and Call Fallback
+                    - paragraph: Queue details for connected responders and call the appropriate official number directly
+                - generic:
+                  - generic:
+                    - heading [level=4]: Automatic Location Sharing
+                    - paragraph: GPS coordinates are attached after you grant browser permission
+                - generic:
+                  - generic:
+                    - heading [level=4]: Auto-Recording
+                    - paragraph: Private recording starts only after camera and microphone permission
+            - generic:
+              - generic:
+                - heading [level=3]: Emergency Mode
+                - paragraph: Activate with a single touch when you need immediate help
+                - link:
+                  - /url: tel:117
+                  - text: Call Police 117
+      - generic:
+        - generic:
+          - generic:
+            - heading [level=2]: Building Safer Communities
+            - paragraph: Share verified local information, follow reported cases, and work with participating safety organizations.
+          - generic:
+            - generic:
+              - generic:
+                - heading [level=3]: Crime Analytics
+                - paragraph: Authorized teams can review aggregate patterns from submitted reports by status, category, and region
+            - generic:
+              - generic:
+                - heading [level=3]: Community Watch
+                - paragraph: Connect with verified neighborhood watch groups and community safety initiatives
+            - generic:
+              - generic:
+                - heading [level=3]: Authority Partnership
+                - paragraph: Assign cases only to verified organizations configured for the relevant jurisdiction
+      - generic:
+        - generic:
+          - generic:
+            - heading [level=2]: Ready to Make Your Community Safer?
+            - paragraph: Join CrimeX today and be part of the solution. Together, we can build safer, more connected communities.
+            - generic:
+              - button: Report an Incident
+              - button: Track a Report
+      - contentinfo:
+        - generic:
+          - generic:
+            - generic: CrimeX
+            - paragraph: A Cameroon-focused reporting, referral and community-safety platform. Delivery to services depends on connected partners.
+          - generic:
+            - heading [level=3]: Quick access
+            - navigation:
+              - link:
+                - /url: /track
+                - text: Track a report
+              - link:
+                - /url: /map
+                - text: Incident map
+              - link:
+                - /url: /partners
+                - text: Verified partners
+              - link:
+                - /url: /support
+                - text: Support the platform
+          - generic:
+            - heading [level=3]: Cameroon emergency lines
+            - generic:
+              - paragraph: Police 117 · Gendarmerie 113 · Pompiers/Fire 118 · SAMU 119
+              - paragraph: Yaoundé, Cameroun
+              - paragraph: If danger is immediate, call the appropriate service directly.
+        - generic: © 2026 CrimeX. Incident reporting is free.
+    - generic [aria-hidden]:
+      - generic:
+        - generic:
+          - button:
+            - generic: EMERGENCY
+  - dialog [ref=f2e339]:
+    - generic [ref=f2e340]:
+      - heading "Report an incident" [level=2] [ref=f2e341]
+      - paragraph [ref=f2e344]: Provide the incident details. Sensitive evidence remains private.
+    - generic [ref=f2e345]:
+      - generic [ref=f2e346]:
+        - generic [ref=f2e347]: Incident type *
+        - combobox "Incident type *" [active] [ref=f2e348]:
+          - option "Select an incident type"
+          - option "Theft / Vol"
+          - option "Motorbike or vehicle theft / Vol de moto ou véhicule"
+          - option "Assault / Agression"
+          - option "Burglary / Cambriolage"
+          - option "Armed robbery / Braquage"
+          - option "Suspicious Activity"
+          - option "Domestic or gender-based violence / VBG"
+          - option "Child protection / Protection de l'enfant"
+          - option "Road crash / Accident de circulation"
+          - option "Fire / Incendie"
+          - option "Medical emergency / Urgence médicale"
+          - option "Mobile Money or online fraud / Arnaque MoMo" [selected]
+          - option "Land or community conflict / Conflit foncier"
+          - option "Missing Person / Personne disparue"
+          - option "Infrastructure hazard / Danger public"
+          - option "Other"
+      - generic [ref=f2e349]:
+        - generic [ref=f2e350]:
+          - combobox [ref=f2e351]:
+            - option "Region *" [selected]
+            - option "Adamawa"
+            - option "Centre"
+            - option "East"
+            - option "Far North"
+            - option "Littoral"
+            - option "North"
+            - option "North-West"
+            - option "South"
+            - option "South-West"
+            - option "West"
+          - combobox [disabled] [ref=f2e352]:
+            - option "Division / Département *" [selected]
+          - textbox "Subdivision / Arrondissement" [ref=f2e353]
+          - textbox "Council / Commune" [ref=f2e354]
+          - textbox "Quarter / village" [ref=f2e355]
+          - textbox "Nearest landmark" [ref=f2e356]
+        - generic [ref=f2e357]:
+          - generic [ref=f2e358]: Location or landmark *
+          - button "Use my GPS location" [ref=f2e359] [cursor=pointer]
+        - textbox "Location or landmark *" [ref=f2e360]:
+          - /placeholder: Location or landmark
+      - generic [ref=f2e361]:
+        - generic [ref=f2e362]: Description *
+        - textbox "Description *" [ref=f2e363]:
+          - /placeholder: Provide a detailed description of the incident including when it happened, who was involved, and any other relevant details...
+        - paragraph [ref=f2e364]: 0/1000 characters
+      - generic [ref=f2e365]:
+        - text: Private evidence (photo, video or audio)
+        - generic [ref=f2e366]:
+          - button "Add Evidence Files" [ref=f2e367] [cursor=pointer]
+          - paragraph [ref=f2e368]: "Maximum file size: 10MB per file. Supported formats: Images, Videos, Audio"
+      - generic [ref=f2e369]:
+        - button "Cancel" [ref=f2e370] [cursor=pointer]
+        - button "Submit Report" [disabled]
+    - button "Close" [ref=f2e371] [cursor=pointer]

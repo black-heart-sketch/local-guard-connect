@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api, apiBlob, apiFetch } from "@/lib/api";
 import { Navigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
-import { User, Phone, MapPin, Mail, Camera, Save, ArrowLeft } from 'lucide-react';
+import { User, Phone, MapPin, Mail, Camera, Save, ArrowLeft, BellRing } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface ProfileData {
@@ -20,11 +20,19 @@ interface ProfileData {
   avatar_url: string;
 }
 
+function applicationServerKey(value: string) {
+  const padding = '='.repeat((4 - value.length % 4) % 4);
+  const raw = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(character => character.charCodeAt(0)));
+}
+
 export default function Profile() {
   const { user, profile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushAvailable, setPushAvailable] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     full_name: '',
     phone: '',
@@ -37,11 +45,17 @@ export default function Profile() {
       setProfileData({
         full_name: profile.full_name || '',
         phone: profile.phone || '',
-        location: profile.location || '',
+        location: typeof profile.location === 'string' ? profile.location : [profile.location?.quarter, profile.location?.town, profile.location?.region].filter(Boolean).join(', '),
         avatar_url: profile.avatar_url || '',
       });
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    apiFetch<{ enabled: boolean }>('/push/config').then(config => setPushAvailable(config.enabled));
+    navigator.serviceWorker.ready.then(registration => registration.pushManager.getSubscription()).then(subscription => setPushEnabled(Boolean(subscription)));
+  }, []);
 
   if (authLoading) {
     return (
@@ -68,19 +82,9 @@ export default function Profile() {
 
     setLoading(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}_${Date.now()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('report-attachments')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('report-attachments')
-        .getPublicUrl(filePath);
+      const body = new FormData();
+      body.set('avatar', file);
+      const { url: publicUrl } = await apiFetch<{ url: string }>('/profile/avatar', { method: 'POST', body });
 
       setProfileData(prev => ({
         ...prev,
@@ -108,7 +112,7 @@ export default function Profile() {
 
     setSaving(true);
     try {
-      const { error } = await (supabase as any)
+      const { error } = await (api as any)
         .from('profiles')
         .update({
           full_name: profileData.full_name,
@@ -139,6 +143,45 @@ export default function Profile() {
   const getUserInitials = () => {
     const name = profileData.full_name || user.email || 'U';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const requestPrivacyAction = async (type: 'correction' | 'deletion' | 'objection') => {
+    try {
+      await apiFetch('/privacy/requests', { method: 'POST', body: JSON.stringify({ type }) });
+      toast({ title: 'Request submitted', description: 'You can follow up with the CrimeX privacy team.' });
+    } catch (error) { toast({ title: 'Request failed', description: error instanceof Error ? error.message : 'Please try again', variant: 'destructive' }); }
+  };
+
+  const exportMyData = async () => {
+    try {
+      const blob = await apiBlob('/privacy/export');
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'crimex-my-data.json';
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) { toast({ title: 'Export failed', description: error instanceof Error ? error.message : 'Please try again', variant: 'destructive' }); }
+  };
+
+  const togglePush = async () => {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const existing = await registration.pushManager.getSubscription();
+      if (existing) {
+        await apiFetch('/push/subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint: existing.endpoint }) });
+        await existing.unsubscribe(); setPushEnabled(false);
+        toast({ title: 'Browser alerts disabled' });
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') throw new Error('Notification permission was not granted');
+      const config = await apiFetch<{ enabled: boolean; publicKey: string | null }>('/push/config');
+      if (!config.enabled || !config.publicKey) throw new Error('Push notifications are not configured');
+      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey(config.publicKey) });
+      await apiFetch('/push/subscriptions', { method: 'POST', body: JSON.stringify(subscription.toJSON()) });
+      setPushEnabled(true); toast({ title: 'Browser alerts enabled' });
+    } catch (error) { toast({ title: 'Could not change browser alerts', description: error instanceof Error ? error.message : 'Try again', variant: 'destructive' }); }
   };
 
   return (
@@ -319,6 +362,21 @@ export default function Profile() {
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mt-8">
+          <CardHeader><CardTitle className="flex items-center gap-2"><BellRing className="h-5 w-5" />Browser alerts</CardTitle><CardDescription>Receive case assignments and safety notices when this browser is closed.</CardDescription></CardHeader>
+          <CardContent><Button variant={pushEnabled ? 'outline' : 'default'} disabled={!pushAvailable && !pushEnabled} onClick={togglePush}>{pushEnabled ? 'Disable browser alerts' : pushAvailable ? 'Enable browser alerts' : 'Push service not configured'}</Button></CardContent>
+        </Card>
+
+        <Card className="mt-8">
+          <CardHeader><CardTitle>Privacy and personal data</CardTitle><CardDescription>Exercise your access, export, correction, objection, or deletion rights.</CardDescription></CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <Button variant="outline" onClick={exportMyData}>Export my data</Button>
+            <Button variant="outline" onClick={() => requestPrivacyAction('correction')}>Request correction</Button>
+            <Button variant="outline" onClick={() => requestPrivacyAction('objection')}>Object to processing</Button>
+            <Button variant="destructive" onClick={() => requestPrivacyAction('deletion')}>Request account deletion</Button>
           </CardContent>
         </Card>
       </main>

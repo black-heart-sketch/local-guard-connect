@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from "@/lib/api";
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,7 +55,7 @@ export function NotificationManagement() {
 
   const fetchNotifications = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('notifications')
         .select('*')
         .order('created_at', { ascending: false });
@@ -67,7 +67,7 @@ export function NotificationManagement() {
       let profiles: any[] = [];
       
       if (targetUserIds.length > 0) {
-        const { data: profileData } = await supabase
+        const { data: profileData } = await api
           .from('profiles')
           .select('user_id, full_name')
           .in('user_id', targetUserIds);
@@ -96,7 +96,7 @@ export function NotificationManagement() {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('profiles')
         .select('id, full_name, user_id')
         .order('full_name');
@@ -130,7 +130,7 @@ export function NotificationManagement() {
     }
 
     try {
-      const { error } = await (supabase as any)
+      const { error } = await (api as any)
         .from('notifications')
         .insert({
           title: formData.title,
@@ -166,7 +166,7 @@ export function NotificationManagement() {
 
   const deleteNotification = async (id: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('notifications')
         .delete()
         .eq('id', id);

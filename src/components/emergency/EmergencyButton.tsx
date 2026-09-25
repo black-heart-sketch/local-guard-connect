@@ -1,7 +1,7 @@
 import { AlertTriangle, AlertCircle, Video, Mic, Square, MapPin, Phone, Users, Shield, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useRef, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -82,12 +82,6 @@ const EmergencyButton = () => {
 
   // Send video chunk to server with session-based concatenation
   const sendVideoChunk = async (videoBlob: Blob, chunkIndex: number) => {
-    if (!user) {
-      logEvent('ERROR: No user authenticated for chunk upload');
-      handleRecordingError('User not authenticated');
-      return;
-    }
-
     if (!recordingSessionIdRef.current) {
       logEvent('ERROR: No recording session ID available');
       handleRecordingError('Recording session not initialized');
@@ -99,7 +93,7 @@ const EmergencyButton = () => {
       chunkIndex,
       blobSize: videoBlob.size,
       blobType: videoBlob.type,
-      userId: user.id
+      userId: user?.id || 'guest'
     });
 
     try {
@@ -148,7 +142,7 @@ const EmergencyButton = () => {
             videoChunk: base64Video, // Use the properly converted base64
             chunkIndex,
             chunkSize: videoBlob.size,
-            userId: user.id,
+            userId: user?.id || null,
             recordingSessionId: recordingSessionIdRef.current, // Session ID to group chunks
             isFirstChunk: isFirstChunkRef.current, // Flag to indicate if this is the first chunk
             timestamp: new Date().toISOString(),
@@ -171,9 +165,9 @@ const EmergencyButton = () => {
             isFirstChunk: isFirstChunkRef.current
           });
 
-          // Send to Supabase function
+          // Send to the Express emergency upload endpoint
           const uploadStartTime = Date.now();
-          const { data, error } = await supabase.functions.invoke('video-stream', {
+          const { data, error } = await api.functions.invoke('video-stream', {
             body: payload
           });
 
@@ -322,16 +316,9 @@ const EmergencyButton = () => {
     logEvent('RECORDING_START_REQUESTED', { userId: user?.id });
     
 
-    if (!user) {
-      const errorMsg = 'Please log in to use emergency features';
-      logEvent('RECORDING_START_FAILED_NO_USER');
-      setError(errorMsg);
-      return;
-    }
-
     try {
       // Generate unique session ID for this recording
-      const sessionId = `emergency_${user.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const sessionId = `emergency_${user?.id || 'guest'}_${Date.now()}_${crypto.randomUUID()}`;
       setRecordingSessionId(sessionId);
       recordingSessionIdRef.current = sessionId;
       setIsFirstChunk(true);
@@ -360,7 +347,7 @@ const EmergencyButton = () => {
       
       logEvent('COUNTDOWN_COMPLETE');
       
-      // Share location and notify emergency contacts
+      // Share location and place the emergency in the dispatch queue.
       shareLocation();
       setEmergencyContacted(true);
       
@@ -451,19 +438,11 @@ const EmergencyButton = () => {
         handleRecordingError('MediaRecorder error occurred', true);
       };
       
-      // Start recording and send chunks every 2 seconds
-      logEvent('STARTING_MEDIARECORDER', { timeslice: 2000 });
-      recorder.start(2000);
+      // Start recording and send chunks every 5 seconds
+      logEvent('STARTING_MEDIARECORDER', { timeslice: 5000 });
+      recorder.start(5000);
       setIsRecording(true);
       setCountdown(null);
-
-      // ⏱️ Auto-download after 5 seconds for testing
-      setTimeout(() => {
-        if (isRecording && savedChunks.length > 0) {
-          logEvent('AUTO_DOWNLOAD_TRIGGER');
-          downloadRecording();
-        }
-      }, 5000);
       
       // Show success message
       toast({
@@ -504,7 +483,7 @@ const EmergencyButton = () => {
       logEvent('SESSION_FINALIZATION_START', { sessionId: recordingSessionIdRef.current });
       
       // Mark session as completed in the database
-      const { error } = await (supabase as any)
+      const { error } = await (api as any)
         .from('emergency_logs')
         .update({ 
           status: 'completed',
@@ -529,105 +508,84 @@ const EmergencyButton = () => {
 
   const stopRecording = () => {
     setIsStopping(true);
-    logEvent('STOP_RECORDING_CALLED', {
+    logEvent('STOP_RECORDING_REQUESTED', {
       mediaRecorderState: mediaRecorder?.state,
       hasStream: !!stream,
-      recordingDuration
     });
-    
-    // Stop the media recorder first
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      logEvent('STOPPING_MEDIARECORDER');
-      try {
-        mediaRecorder.stop();
-        logEvent('MEDIARECORDER_STOPPED_SUCCESSFULLY');
-      } catch (error) {
-        logEvent('ERROR_STOPPING_MEDIARECORDER', { error: error.message });
-      }
-    }
-    
-    // Stop all tracks to release camera/microphone
-    if (stream) {
-      const videoTracks = stream.getVideoTracks();
-      const audioTracks = stream.getAudioTracks();
-      
-      logEvent('STOPPING_MEDIA_TRACKS', {
-        videoTracks: videoTracks.length,
-        audioTracks: audioTracks.length
-      });
 
-      // Stop each track individually with error handling
-      stream.getTracks().forEach(track => {
-        try {
-          track.stop();
-          logEvent('TRACK_STOPPED', { 
-            kind: track.kind, 
-            label: track.label,
-            state: track.readyState 
-          });
-        } catch (error) {
-          logEvent('ERROR_STOPPING_TRACK', { 
-            kind: track.kind, 
-            error: error.message 
-          });
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      // The onstop event will handle all cleanup.
+      mediaRecorder.onstop = () => {
+        logEvent('MEDIARECORDER_ONSTOP_EVENT', {
+          totalChunks: chunks.current.length,
+          totalSize: chunks.current.reduce((sum, chunk) => sum + chunk.size, 0),
+        });
+
+        // Stop all media tracks to release camera/mic
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+          setStream(null);
+          logEvent('MEDIA_STREAM_CLEARED');
         }
-      });
-      
-      // Clear the stream reference
-      setStream(null);
-      logEvent('STREAM_CLEARED');
-    } else {
-      logEvent('NO_STREAM_TO_STOP');
-    }
-    
-    // Clear intervals
-    if (durationInterval.current) {
-      clearInterval(durationInterval.current);
-      durationInterval.current = null;
-    }
-    
-    if (uploadInterval.current) {
-      clearInterval(uploadInterval.current);
-      uploadInterval.current = null;
-    }
-    
-    // Finalize the recording session before resetting state
-    finalizeRecordingSession();
-    
-    // Reset state
-    setIsRecording(false);
-    setIsStopping(false);
-    setMediaRecorder(null);
-    setRecordingDuration(0);
-    setLocationSent(false);
-    setLocationStatus('');
-    setEmergencyContacted(false);
-    setUploadStatus('');
-    setChunkCount(0);
-    setTotalUploadSize(0);
-    setLastChunkTime(null);
-    
-    // Show completion message
-    toast({
-      title: "Emergency Recording Stopped",
-      description: `Recording completed: ${chunkCount} chunks uploaded`,
-      duration: 5000,
-    });
-    
-    logEvent('RECORDING_SESSION_ENDED', {
-      sessionId: recordingSessionIdRef.current,
-      totalChunks: chunkCount,
-      totalSize: totalUploadSize,
-      duration: recordingDuration
-    });
 
-    // Reset session state last
-    setRecordingSessionId(null);
-    recordingSessionIdRef.current = null;
-    setIsFirstChunk(true);
-    isFirstChunkRef.current = true;
-    currentLocation.current = null;
-    sessionStartTime.current = null;
+        // Clear intervals
+        if (durationInterval.current) clearInterval(durationInterval.current);
+        durationInterval.current = null;
+        if (uploadInterval.current) clearInterval(uploadInterval.current);
+        uploadInterval.current = null;
+
+        // Finalize session on the backend
+        finalizeRecordingSession();
+
+        // Reset all component state
+        setIsRecording(false);
+        setIsStopping(false);
+        setMediaRecorder(null);
+        setRecordingDuration(0);
+        setLocationSent(false);
+        setLocationStatus('');
+        setEmergencyContacted(false);
+        setUploadStatus('');
+        
+        toast({
+          title: "Emergency Recording Stopped",
+          description: `Recording completed. ${chunkCount} chunks uploaded.`,
+          duration: 5000,
+        });
+
+        logEvent('RECORDING_SESSION_ENDED', {
+          sessionId: recordingSessionIdRef.current,
+          totalChunks: chunkCount,
+          totalSize: totalUploadSize,
+          duration: recordingDuration,
+        });
+        
+        // Reset session-specific state
+        setChunkCount(0);
+        setTotalUploadSize(0);
+        setLastChunkTime(null);
+        setRecordingSessionId(null);
+        recordingSessionIdRef.current = null;
+        setIsFirstChunk(true);
+        isFirstChunkRef.current = true;
+        currentLocation.current = null;
+        sessionStartTime.current = null;
+      };
+
+      logEvent('MEDIARECORDER_STOP_CALLED');
+      mediaRecorder.stop();
+    } else {
+      // Fallback cleanup if recorder is not in a recording state
+      logEvent('STOP_RECORDING_FALLBACK', { state: mediaRecorder?.state });
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+      }
+      if (durationInterval.current) clearInterval(durationInterval.current);
+      if (uploadInterval.current) clearInterval(uploadInterval.current);
+      setIsRecording(false);
+      setIsStopping(false);
+    }
   };
 
   const formatDuration = (seconds: number) => {
@@ -766,7 +724,7 @@ const EmergencyButton = () => {
               {emergencyContacted && (
                 <div className="flex items-center text-blue-600 text-xs">
                   <Users className="h-4 w-4 mr-2" />
-                  <span>Emergency services notified</span>
+                  <span>Dispatch queue notified — call an official number until acknowledged</span>
                   <div className="ml-auto w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                 </div>
               )}
@@ -832,6 +790,7 @@ const EmergencyButton = () => {
           <div className="relative">
             <Button
               onClick={() => {
+                console.log("STOP BUTTON CLICKED! Triggering stopRecording function...");
                 logEvent('STOP_BUTTON_CLICKED');
                 stopRecording();
               }}
@@ -875,7 +834,7 @@ const EmergencyButton = () => {
               className={`h-18 w-18 rounded-full bg-gradient-to-r from-red-600 via-red-500 to-red-600 hover:from-red-700 hover:via-red-600 hover:to-red-700 text-white shadow-2xl transform hover:scale-110 transition-all duration-300 flex flex-col items-center justify-center border-4 border-white relative overflow-hidden ${
                 countdown !== null ? 'animate-bounce scale-125' : ''
               }`}
-              disabled={countdown !== null || !user}
+              disabled={countdown !== null}
             >
               {/* Animated Background */}
               <div className="absolute inset-0 bg-gradient-to-r from-red-400 to-red-600 opacity-50 animate-pulse"></div>
@@ -884,11 +843,6 @@ const EmergencyButton = () => {
                 <div className="relative z-10 flex flex-col items-center">
                   <span className="text-2xl font-bold animate-pulse">{countdown}</span>
                   <span className="text-xs font-medium">ACTIVATING</span>
-                </div>
-              ) : !user ? (
-                <div className="relative z-10 flex flex-col items-center">
-                  <AlertTriangle className="h-6 w-6 mb-1" />
-                  <span className="text-xs font-bold">LOGIN REQUIRED</span>
                 </div>
               ) : (
                 <div className="relative z-10 flex flex-col items-center">
@@ -911,29 +865,21 @@ const EmergencyButton = () => {
                 <div className="space-y-2 text-sm text-slate-600">
                   <div className="flex items-center">
                     <div className="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                    <span>Live video streaming to emergency services</span>
+                    <span>Secure evidence upload to the dispatch queue</span>
                   </div>
                   <div className="flex items-center">
                     <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                    <span>GPS location shared with authorities</span>
+                    <span>GPS shared with authorized dispatchers</span>
                   </div>
                   <div className="flex items-center">
                     <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                    <span>Emergency contacts automatically notified</span>
+                    <span>Call an official number until a responder acknowledges</span>
                   </div>
                 </div>
-                {!user && (
-                  <div className="mt-3 pt-3 border-t border-slate-200 bg-yellow-50 p-2 rounded">
-                    <p className="text-xs text-yellow-800">
-                      <AlertTriangle className="h-3 w-3 inline mr-1" />
-                      Please log in to use emergency features
-                    </p>
-                  </div>
-                )}
                 <div className="mt-3 pt-3 border-t border-slate-200">
                   <p className="text-xs text-slate-500">
                     <Phone className="h-3 w-3 inline mr-1" />
-                    For immediate help, call 911 directly
+                    Cameroon: Police 117 · Gendarmerie 113 · Fire 118 · SAMU 119
                   </p>
                 </div>
               </div>

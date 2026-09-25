@@ -1,0 +1,11 @@
+{
+  "name": "CrimeX Cameroon",
+  "short_name": "CrimeX",
+  "description": "Bilingual community safety and incident reporting for Cameroon",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#dc2626",
+  "lang": "fr",
+  "icons": [{ "src": "/favicon.jpeg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any maskable" }]
+}
