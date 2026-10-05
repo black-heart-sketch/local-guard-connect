@@ -18,8 +18,7 @@ export interface Database {
           status: string
           location_data: Json | null
           video_path: string | null
-          chunk_count: number | null
-          chunk_size: number | null
+          stream_size: number | null
           recording_session_id: string | null
           created_at: string
           updated_at: string
@@ -31,8 +30,7 @@ export interface Database {
           status?: string
           location_data?: Json | null
           video_path?: string | null
-          chunk_count?: number | null
-          chunk_size?: number | null
+          stream_size?: number | null
           recording_session_id?: string | null
           created_at?: string
           updated_at?: string
@@ -44,8 +42,7 @@ export interface Database {
           status?: string
           location_data?: Json | null
           video_path?: string | null
-          chunk_count?: number | null
-          chunk_size?: number | null
+          stream_size?: number | null
           recording_session_id?: string | null
           created_at?: string
           updated_at?: string

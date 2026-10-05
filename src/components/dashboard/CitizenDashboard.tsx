@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ReportPopup } from '@/components/reports/ReportPopup';
-import EmergencyButton from '@/components/emergency/EmergencyButton';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Plus, MapPin, Calendar } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
@@ -126,7 +125,6 @@ export function CitizenDashboard() {
               </p>
             </div>
             <div className="flex gap-4">
-              <EmergencyButton />
               <Button onClick={() => setShowReportPopup(true)}>
                 <Plus className="w-4 h-4 mr-2" />
                 New Report

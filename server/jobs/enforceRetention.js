@@ -13,8 +13,8 @@ for (const report of await Report.find({ ...expired, status: { $in: ["resolved",
   await report.save();
 }
 for (const emergency of await Emergency.find({ ...expired, status: { $in: ["completed", "failed", "cancelled"] } })) {
-  for (const chunk of emergency.chunks) fs.rmSync(path.join(config.uploadDir, "emergency", chunk.storedName), { force: true });
-  emergency.chunks = [];
+  if (emergency.recording?.storedName) fs.rmSync(path.join(config.uploadDir, "emergency", emergency.recording.storedName), { force: true });
+  emergency.recording = undefined;
   await emergency.save();
 }
 await mongoose.disconnect();

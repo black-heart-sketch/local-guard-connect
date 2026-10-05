@@ -1,0 +1,218 @@
+- generic:
+  - generic:
+    - list
+    - region "Notifications alt+T"
+    - generic [aria-hidden]:
+      - banner:
+        - generic: "Emergency: Police 117 · Gendarmerie 113 · Fire 118 · SAMU 119"
+        - generic:
+          - generic:
+            - link:
+              - /url: /
+              - generic:
+                - generic:
+                  - text: CrimeX
+                  - generic: Cameroon safety network
+            - navigation:
+              - button:
+                - generic: Features
+              - button:
+                - generic: How it works
+              - link:
+                - /url: /community
+                - generic: Community
+              - link:
+                - /url: /partners
+                - generic: Partners
+              - link:
+                - /url: /track
+                - generic: Track report
+              - button:
+                - generic: Emergency
+            - generic:
+              - button: Français
+              - generic:
+                - button:
+                  - generic: "4"
+                - generic:
+                  - generic:
+                    - generic: CrimeX Administrator
+                    - generic: Community Member
+      - main:
+        - generic:
+          - generic:
+            - generic:
+              - generic: BUILT FOR COMMUNITIES IN CAMEROON
+              - heading [level=1]: Report. Refer. Protect our communities.
+              - paragraph: CrimeX makes incident reporting easier, even offline, with confidential tracking, local landmarks and official emergency numbers.
+              - generic:
+                - button: Report an incident
+                - link:
+                  - /url: /track
+                  - text: Track a report
+              - paragraph: Reporting is free. No payment is required.
+            - complementary:
+              - generic: National coverage
+              - heading [level=2]: Designed around local realities
+              - list:
+                - listitem:
+                  - generic:
+                    - strong: 10 regions and 58 divisions
+                    - generic: Neighbourhoods, villages, junctions and landmarks.
+                - listitem:
+                  - generic:
+                    - strong: Bilingual access
+                    - generic: Français · English
+                - listitem:
+                  - generic:
+                    - strong: Official numbers always visible
+                    - generic: Police 117 · Gendarmerie 113 · Pompiers 118 · SAMU 119
+        - generic:
+          - generic:
+            - generic:
+              - paragraph: EN / FR
+              - paragraph: Bilingual access
+            - generic:
+              - paragraph: "10"
+              - paragraph: Regions covered
+            - generic:
+              - paragraph: "58"
+              - paragraph: Divisions
+            - generic:
+              - paragraph: Private
+              - paragraph: Sensitive evidence
+        - generic:
+          - generic:
+            - generic:
+              - paragraph: Services
+              - heading [level=2]: The essentials for reporting with confidence
+              - paragraph: Clear, understandable tools adapted to mobile connections.
+            - generic:
+              - generic:
+                - generic:
+                  - heading [level=3]: Simple reporting
+                - generic:
+                  - paragraph: Describe an incident and attach private evidence from your phone.
+              - generic:
+                - generic:
+                  - heading [level=3]: Privacy-aware map
+                - generic:
+                  - paragraph: See only non-sensitive, resolved incidents with approximate locations.
+              - generic:
+                - generic:
+                  - heading [level=3]: Optional anonymity
+                - generic:
+                  - paragraph: Report without an account and follow the case with a private reference.
+              - generic:
+                - generic:
+                  - heading [level=3]: Protected evidence
+                - generic:
+                  - paragraph: Photos, video and audio are never shown on the public map.
+              - generic:
+                - generic:
+                  - heading [level=3]: GBV referral
+                - generic:
+                  - paragraph: A protected path for gender-based violence and referral to an approved partner.
+              - generic:
+                - generic:
+                  - heading [level=3]: French and English
+                - generic:
+                  - paragraph: Essential journeys are available in both official languages.
+        - generic:
+          - generic:
+            - generic:
+              - paragraph: Process
+              - heading [level=2]: Three clear steps
+            - generic:
+              - article:
+                - generic: "01"
+                - heading [level=3]: Report
+                - paragraph: Choose anonymity, describe the place with a neighbourhood or landmark, then add useful evidence.
+              - article:
+                - generic: "02"
+                - heading [level=3]: Triage
+                - paragraph: An authorized operator reviews and routes the case to a partner configured for the area.
+              - article:
+                - generic: "03"
+                - heading [level=3]: Track
+                - paragraph: Follow progress with your reference without publicly exposing sensitive information.
+        - generic:
+          - generic:
+            - generic:
+              - generic: In an emergency
+              - heading [level=2]: Call the appropriate service first
+              - paragraph: CrimeX can record an alert, permitted location and private video. A saved alert does not mean an official service has received it.
+              - generic:
+                - generic:
+                  - generic:
+                    - strong: Continuous video stream
+                    - generic: You control when it starts and stops.
+                - generic:
+                  - generic:
+                    - strong: Location by consent
+                    - generic: Only after permission.
+            - generic:
+              - heading [level=3]: Immediate danger?
+              - paragraph: Contact Cameroon emergency services directly.
+              - generic:
+                - link:
+                  - /url: tel:117
+                  - text: Police 117
+                - link:
+                  - /url: tel:113
+                  - text: Gendarmerie 113
+                - link:
+                  - /url: tel:118
+                  - text: Pompiers 118
+                - link:
+                  - /url: tel:119
+                  - text: SAMU 119
+        - generic:
+          - generic:
+            - generic:
+              - paragraph: Community safety
+              - heading [level=2]: Need to report an incident?
+              - paragraph: Start without an account or sign in to keep all your cases together.
+            - generic:
+              - button: Make a report
+              - link:
+                - /url: /map
+                - text: View the map
+      - contentinfo:
+        - generic:
+          - generic:
+            - generic: CrimeX
+            - paragraph: A Cameroon-focused reporting, referral and community-safety platform. Delivery to services depends on connected partners.
+          - generic:
+            - heading [level=3]: Quick access
+            - navigation:
+              - link:
+                - /url: /track
+                - text: Track a report
+              - link:
+                - /url: /map
+                - text: Incident map
+              - link:
+                - /url: /partners
+                - text: Verified partners
+              - link:
+                - /url: /support
+                - text: Support the platform
+          - generic:
+            - heading [level=3]: Cameroon emergency lines
+            - generic:
+              - paragraph: Police 117 · Gendarmerie 113 · Pompiers/Fire 118 · SAMU 119
+              - paragraph: Yaoundé, Cameroun
+              - paragraph: If danger is immediate, call the appropriate service directly.
+        - generic: © 2026 CrimeX. Incident reporting is free.
+    - generic [aria-hidden]:
+      - generic:
+        - button:
+          - generic: EMERGENCY
+  - menu "CrimeX Administrator Community Member" [active] [ref=e365]:
+    - generic [ref=e366]: Profile
+    - separator [ref=e367]
+    - menuitem "Dashboard" [ref=e368]
+    - menuitem "Profile" [ref=e369]
+    - separator [ref=e370]
+    - menuitem "Log out" [ref=e371]

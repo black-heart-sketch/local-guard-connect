@@ -1,0 +1,57 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - heading "CrimeX" [level=1] [ref=e10]
+      - paragraph [ref=e11]: Secure community crime reporting platform
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - heading "Welcome Back" [level=3] [ref=e14]
+        - paragraph [ref=e15]: Sign in to your account or create a new one to get started
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - tablist [ref=e18]:
+            - tab "Sign In" [selected] [ref=e19] [cursor=pointer]
+            - tab "Sign Up" [ref=e20] [cursor=pointer]
+            - tab "Phone OTP" [ref=e21] [cursor=pointer]
+          - tabpanel "Sign In" [ref=e22]:
+            - generic [ref=e23]:
+              - generic [ref=e24]:
+                - text: Email or Cameroon phone number
+                - textbox "Email or Cameroon phone number" [ref=e29]:
+                  - /placeholder: name@example.com or +2376XXXXXXXX
+              - generic [ref=e30]:
+                - text: Password
+                - generic [ref=e31]:
+                  - textbox "Password" [ref=e35]:
+                    - /placeholder: Enter your password
+                  - button [ref=e36] [cursor=pointer]
+              - button "Sign In" [ref=e40] [cursor=pointer]
+        - generic [ref=e41]:
+          - paragraph [ref=e47]: Quick access — seeded demo accounts
+          - generic [ref=e48]:
+            - button "Citizen citizen@crimex.cm" [ref=e49] [cursor=pointer]:
+              - generic [ref=e50]:
+                - generic [ref=e51]: Citizen
+                - generic [ref=e52]: citizen@crimex.cm
+            - button "Dispatcher dispatcher@crimex.cm" [ref=e53] [cursor=pointer]:
+              - generic [ref=e54]:
+                - generic [ref=e55]: Dispatcher
+                - generic [ref=e56]: dispatcher@crimex.cm
+            - button "Police police@crimex.cm" [ref=e57] [cursor=pointer]:
+              - generic [ref=e58]:
+                - generic [ref=e59]: Police
+                - generic [ref=e60]: police@crimex.cm
+            - button "Administrator admin@crimex.cm" [ref=e61] [cursor=pointer]:
+              - generic [ref=e62]:
+                - generic [ref=e63]: Administrator
+                - generic [ref=e64]: admin@crimex.cm
+          - paragraph [ref=e65]:
+            - text: Run
+            - code [ref=e66]: npm run db:seed
+            - text: first. Quick access can be hidden with
+            - code [ref=e67]: VITE_ENABLE_QUICK_LOGIN=false
+            - text: .
+    - paragraph [ref=e68]: By continuing, you agree to our Terms of Service and Privacy Policy

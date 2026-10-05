@@ -41,9 +41,7 @@ export default defineConfig(({ command, mode }) => {
       host: true,
       port: 3000,
       strictPort: true,
-      hmr: {
-        clientPort: 443,
-      },
+      ...(env.VITE_HMR_CLIENT_PORT ? { hmr: { clientPort: Number(env.VITE_HMR_CLIENT_PORT) } } : {}),
       cors: true,
       allowedHosts: allowedHosts,
       headers: {
@@ -55,7 +53,8 @@ export default defineConfig(({ command, mode }) => {
         '/api': {
           target: env.VITE_API_PROXY_TARGET || 'http://localhost:4000',
           changeOrigin: true,
-          secure: false
+          secure: false,
+          ws: true
         }
       }
     },
@@ -73,7 +72,8 @@ export default defineConfig(({ command, mode }) => {
         '/api': {
           target: env.VITE_API_PROXY_TARGET || 'http://localhost:4000',
           changeOrigin: true,
-          secure: false
+          secure: false,
+          ws: true
         }
       }
     }

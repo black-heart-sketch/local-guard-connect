@@ -1,0 +1,6 @@
+- generic [active]:
+  - generic:
+    - region "Notifications (F8)":
+      - list
+    - region "Notifications alt+T"
+    - button "EMERGENCY" [ref=e3] [cursor=pointer]

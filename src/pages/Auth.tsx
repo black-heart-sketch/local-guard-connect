@@ -1,43 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from "@/lib/api";
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { PhoneOtpForm } from '@/components/auth/PhoneOtpForm';
-import { Shield } from 'lucide-react';
+import { Shield, UserRoundCheck } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+
+const quickAccounts = [
+  { label: 'Citizen', email: 'citizen@crimex.cm' },
+  { label: 'Dispatcher', email: 'dispatcher@crimex.cm' },
+  { label: 'Police', email: 'police@crimex.cm' },
+  { label: 'Administrator', email: 'admin@crimex.cm' },
+];
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
+  const quickLoginEnabled = import.meta.env.VITE_ENABLE_QUICK_LOGIN !== 'false';
 
   useEffect(() => {
-    // Check if user is already logged in
-    const checkAuth = async () => {
-      const { data: { session } } = await api.auth.getSession();
-      if (session) {
-        navigate('/');
-      }
-    };
-    checkAuth();
-
-    // Listen for auth changes
-    const { data: { subscription } } = api.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          toast({
-            title: 'Welcome!',
-            description: 'You have successfully signed in.',
-          });
-          navigate('/');
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, [navigate, toast]);
+    if (!authLoading && user) navigate('/');
+  }, [authLoading, navigate, user]);
 
   const handleEmailAuth = async (email: string, password: string, isSignUp: boolean) => {
     setLoading(true);
@@ -62,7 +51,9 @@ export default function Auth() {
         });
         
         if (error) throw error;
+        toast({ title: 'Welcome!', description: 'You have successfully signed in.' });
       }
+      navigate('/');
     } catch (error: any) {
       toast({
         variant: 'destructive',
@@ -75,7 +66,7 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center border-t-4 border-primary p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <div className="flex justify-center">
@@ -89,7 +80,7 @@ export default function Auth() {
           </p>
         </div>
 
-        <Card className="backdrop-blur-sm bg-card/95 shadow-lg border-border/50">
+        <Card className="bg-card shadow-md border-border">
           <CardHeader>
             <CardTitle>Welcome Back</CardTitle>
             <CardDescription>
@@ -121,6 +112,14 @@ export default function Auth() {
               </TabsContent>
               <TabsContent value="phone" className="space-y-4"><PhoneOtpForm /></TabsContent>
             </Tabs>
+
+            {quickLoginEnabled && <div className="border-t pt-5">
+              <div className="mb-3 flex items-center gap-2"><UserRoundCheck className="h-4 w-4 text-primary" /><p className="text-sm font-semibold">Quick access — seeded demo accounts</p></div>
+              <div className="grid grid-cols-2 gap-2">
+                {quickAccounts.map(account => <Button key={account.email} type="button" variant="outline" className="h-auto justify-start py-3 text-left" disabled={loading} onClick={() => handleEmailAuth(account.email, 'Cameroon@2026', false)}><span><span className="block text-sm font-semibold">{account.label}</span><span className="block max-w-32 truncate text-xs font-normal text-muted-foreground">{account.email}</span></span></Button>)}
+              </div>
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">Run <code className="rounded bg-muted px-1 py-0.5">npm run db:seed</code> first. Quick access can be hidden with <code className="rounded bg-muted px-1 py-0.5">VITE_ENABLE_QUICK_LOGIN=false</code>.</p>
+            </div>}
 
           </CardContent>
         </Card>

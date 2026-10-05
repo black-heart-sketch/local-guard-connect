@@ -1,0 +1,143 @@
+- generic [ref=e7]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e372]:
+    - banner [ref=e373]:
+      - generic [ref=e374]: "Emergency: Police 117 · Gendarmerie 113 · Fire 118 · SAMU 119"
+      - generic [ref=e380]:
+        - link "CrimeX CrimeX Cameroon safety network" [ref=e381] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e382]:
+            - img "CrimeX" [ref=e385]
+            - generic [ref=e386]:
+              - text: CrimeX
+              - generic [ref=e387]: Cameroon safety network
+        - navigation [ref=e388]:
+          - button "Features" [ref=e389] [cursor=pointer]
+          - button "How it works" [ref=e393] [cursor=pointer]
+          - link "Community" [ref=e400] [cursor=pointer]:
+            - /url: /community
+          - link "Partners" [ref=e407] [cursor=pointer]:
+            - /url: /partners
+          - link "Track report" [ref=e411] [cursor=pointer]:
+            - /url: /track
+          - button "Emergency" [ref=e416] [cursor=pointer]
+        - generic [ref=e421]:
+          - button "Change language" [ref=e422] [cursor=pointer]: Français
+          - generic [ref=e423]:
+            - button "4" [ref=e424] [cursor=pointer]
+            - generic [ref=e431] [cursor=pointer]:
+              - generic [ref=e432]: CrimeX Administrator
+              - generic [ref=e433]: Community Member
+    - banner [ref=e436]:
+      - generic [ref=e438]:
+        - generic [ref=e439]:
+          - heading "Admin Dashboard" [level=1] [ref=e440]
+          - paragraph [ref=e441]: Manage reports, users, and system settings
+        - generic [ref=e442]: ADMIN
+    - main [ref=e443]:
+      - generic [ref=e444]:
+        - tablist [ref=e445]:
+          - tab "Crime Reports" [ref=e446] [cursor=pointer]
+          - tab "User Management" [ref=e450] [cursor=pointer]
+          - tab "Notifications" [ref=e456] [cursor=pointer]
+          - tab "Emergency Logs" [active] [selected] [ref=e460] [cursor=pointer]
+          - tab "Partners" [ref=e463] [cursor=pointer]
+          - tab "Moderation" [ref=e468] [cursor=pointer]
+        - tabpanel "Emergency Logs" [ref=e571]:
+          - generic [ref=e572]:
+            - generic [ref=e573]:
+              - heading "Emergency Video Logs" [level=2] [ref=e574]
+              - paragraph [ref=e575]: View and manage emergency video recordings
+            - generic [ref=e576]:
+              - generic [ref=e577]:
+                - heading "Total Emergencies" [level=3] [ref=e579]
+                - generic [ref=e582]: "3"
+              - generic [ref=e584]:
+                - heading "Queued" [level=3] [ref=e586]
+                - generic [ref=e589]: "3"
+              - generic [ref=e591]:
+                - heading "Acknowledged" [level=3] [ref=e593]
+                - generic [ref=e596]: "0"
+              - generic [ref=e598]:
+                - heading "Completed" [level=3] [ref=e600]
+                - generic [ref=e603]: "0"
+            - generic [ref=e605]:
+              - heading "Filters" [level=3] [ref=e610]
+              - generic [ref=e612]:
+                - textbox "Search logs..." [ref=e617]
+                - combobox [ref=e618] [cursor=pointer]:
+                  - generic: All Statuses
+                - combobox [ref=e621] [cursor=pointer]:
+                  - generic: All Types
+                - generic [ref=e624]: Showing 3 of 3 logs
+            - generic [ref=e625]:
+              - generic [ref=e626]:
+                - heading "Emergency Video Logs" [level=3] [ref=e627]
+                - paragraph [ref=e628]: Click on any log to view detailed information and watch the emergency video
+              - generic [ref=e630]:
+                - generic [ref=e631] [cursor=pointer]:
+                  - generic [ref=e632]:
+                    - generic [ref=e633]:
+                      - generic [ref=e634]:
+                        - heading "Emergency panic_button" [level=3] [ref=e635]
+                        - generic [ref=e636]: queued
+                        - generic [ref=e637]: panic_button
+                        - generic [ref=e638]: Video Available
+                      - generic [ref=e639]:
+                        - text: CrimeX Administrator
+                        - generic [ref=e643]: • +237699100004
+                      - generic [ref=e644]:
+                        - text: Sep 26, 2026, 02:11 PM
+                        - generic [ref=e647]: "Session: emergency_1790428268881_926664a6-3bcb-4b88-8efe-a054edc7a55e"
+                    - generic [ref=e648]:
+                      - button [ref=e649]
+                      - button [ref=e650]
+                      - button "Update" [ref=e651]
+                      - button "Delete" [ref=e652]
+                  - generic [ref=e653]:
+                    - generic [ref=e654]: "Transfer: Continuous stream"
+                    - generic [ref=e655]: "Size: 2.88 MB"
+                    - generic [ref=e656]: "Location: Available"
+                - generic [ref=e657] [cursor=pointer]:
+                  - generic [ref=e658]:
+                    - generic [ref=e659]:
+                      - generic [ref=e660]:
+                        - heading "Emergency panic_button" [level=3] [ref=e661]
+                        - generic [ref=e662]: queued
+                        - generic [ref=e663]: panic_button
+                        - generic [ref=e664]: Video Available
+                      - generic [ref=e665]: Unknown User
+                      - generic [ref=e669]:
+                        - text: Sep 26, 2026, 01:54 PM
+                        - generic [ref=e672]: "Session: emergency_1790427277263_3dd1086f-6c76-4f27-bd4e-3348057525f3"
+                    - generic [ref=e673]:
+                      - button [ref=e674]
+                      - button [ref=e675]
+                      - button "Update" [ref=e676]
+                      - button "Delete" [ref=e677]
+                  - generic [ref=e678]:
+                    - generic [ref=e679]: "Transfer: Continuous stream"
+                    - generic [ref=e680]: "Size: 20 Bytes"
+                    - generic [ref=e681]: "Location: Available"
+                - generic [ref=e682] [cursor=pointer]:
+                  - generic [ref=e683]:
+                    - generic [ref=e684]:
+                      - generic [ref=e685]:
+                        - heading "Emergency panic_button" [level=3] [ref=e686]
+                        - generic [ref=e687]: queued
+                        - generic [ref=e688]: panic_button
+                      - generic [ref=e689]: Unknown User
+                      - generic [ref=e693]:
+                        - text: Sep 25, 2026, 01:56 AM
+                        - generic [ref=e696]: "Session: emergency_guest_1790297756927_f09a62e7-6ac1-4ec3-9525-4a6d666162e9"
+                    - generic [ref=e697]:
+                      - button [ref=e698]
+                      - button "Update" [ref=e699]
+                      - button "Delete" [ref=e700]
+                  - generic [ref=e701]:
+                    - generic [ref=e702]: "Transfer: Continuous stream"
+                    - generic [ref=e703]: "Size: 0 Bytes"
+                    - generic [ref=e704]: "Location: Available"
+  - button "EMERGENCY" [ref=e361] [cursor=pointer]

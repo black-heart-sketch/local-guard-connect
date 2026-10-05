@@ -2,25 +2,37 @@ import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import request from "supertest";
+import http from "node:http";
+import { randomUUID } from "node:crypto";
+import { WebSocket } from "ws";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { createApp } from "../app.js";
 import { User } from "../models/User.js";
+import { attachEmergencyStreamSocket } from "../routes/emergencyRoutes.js";
 
 let mongo;
 let app;
 let citizenToken;
+let citizenId;
 let adminToken;
 let anonymousReference;
 let anonymousRecoveryCode;
 let anonymousReportId;
+let server;
+let serverUrl;
 
 before(async () => {
   mongo = await MongoMemoryServer.create({ instance: { launchTimeout: 60000 } });
   await mongoose.connect(mongo.getUri());
   app = createApp();
+  server = http.createServer(app);
+  attachEmergencyStreamSocket(server);
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  serverUrl = `ws://127.0.0.1:${server.address().port}`;
 });
 
 after(async () => {
+  if (server) await new Promise(resolve => server.close(resolve));
   await mongoose.disconnect();
   if (mongo) await mongo.stop();
 });
@@ -33,6 +45,7 @@ test("health exposes the MongoDB backend", async () => {
 test("citizen registration, session and profile update", async () => {
   const registered = await request(app).post("/api/auth/register").send({ email: "citizen@example.cm", password: "StrongPass123!", fullName: "Test Citizen", locale: "en" }).expect(201);
   citizenToken = registered.body.token;
+  citizenId = registered.body.user.id;
   assert.equal(registered.body.profile.role, "citizen");
 
   const session = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${citizenToken}`).expect(200);
@@ -44,6 +57,18 @@ test("citizen registration, session and profile update", async () => {
   const admin = await request(app).post("/api/auth/register").send({ email: "admin@example.cm", password: "StrongPass123!", fullName: "Test Administrator", locale: "fr" }).expect(201);
   await User.findByIdAndUpdate(admin.body.user.id, { role: "admin", verified: true });
   adminToken = admin.body.token;
+});
+
+test("session reads are not throttled like credential attempts", async () => {
+  const responses = await Promise.all(Array.from({ length: 35 }, () => request(app).get("/api/auth/me").set("Authorization", `Bearer ${citizenToken}`)));
+  assert.ok(responses.every(response => response.status === 200));
+});
+
+test("administrator can update user identity, role and jurisdiction fields", async () => {
+  const updated = await request(app).patch(`/api/users/${citizenId}`).set("Authorization", `Bearer ${adminToken}`).send({ fullName: "Updated Citizen", phone: "+237699123457", role: "citizen", jurisdiction: { region: "Centre", division: "Mfoundi", town: "Yaounde" } }).expect(200);
+  assert.equal(updated.body.full_name, "Updated Citizen");
+  assert.equal(updated.body.phone, "+237699123457");
+  assert.equal(updated.body.location.town, "Yaounde");
 });
 
 test("anonymous report returns a recovery code and hides it from public listings", async () => {
@@ -67,14 +92,43 @@ test("anonymous report can be tracked by Cameroon reference and recovery code", 
   assert.ok(Array.isArray(tracked.body.timeline));
 });
 
-test("guest emergency uses a recovery code for recording chunks", async () => {
-  const sessionId = `test-${Date.now()}`;
+test("guest emergency transfers one continuous recording stream", async () => {
+  const sessionId = `test-${randomUUID()}`;
   const created = await request(app).post("/api/emergencies").send({ recordingSessionId: sessionId, type: "medical", latitude: 4.0511, longitude: 9.7679 }).expect(201);
   assert.equal(created.body.authorityNotified, false);
   assert.ok(created.body.recoveryCode);
 
-  const uploaded = await request(app).post(`/api/emergencies/${sessionId}/chunks`).set("x-recovery-code", created.body.recoveryCode).attach("chunk", Buffer.from("test recording"), { filename: "chunk.webm", contentType: "video/webm" }).field("index", "0").expect(200);
-  assert.equal(uploaded.body.chunkCount, 1);
+  const recording = Buffer.from("continuous test recording stream");
+  const uploaded = await request(app).post(`/api/emergencies/${sessionId}/stream`).set("x-recovery-code", created.body.recoveryCode).set("content-type", "video/webm").send(recording).expect(200);
+  assert.equal(uploaded.body.size, recording.length);
+  const downloaded = await request(app).get(`/api/emergencies/${created.body.emergency.id}/recording`).set("x-recovery-code", created.body.recoveryCode).expect(200);
+  assert.deepEqual(downloaded.body, recording);
+  assert.equal(downloaded.headers["accept-ranges"], "bytes");
+
+  const partial = await request(app).get(`/api/emergencies/${created.body.emergency.id}/recording`).set("x-recovery-code", created.body.recoveryCode).set("Range", "bytes=0-9").expect(206);
+  assert.equal(partial.headers["content-range"], `bytes 0-9/${recording.length}`);
+  assert.deepEqual(partial.body, recording.subarray(0, 10));
+});
+
+test("browser-compatible WebSocket stream saves one emergency recording", async () => {
+  const sessionId = `socket-${randomUUID()}`;
+  const created = await request(app).post("/api/emergencies").send({ recordingSessionId: sessionId, type: "panic_button", latitude: 3.848, longitude: 11.502 }).expect(201);
+  const recording = Buffer.from("continuous websocket recording stream");
+  const result = await new Promise((resolve, reject) => {
+    const socket = new WebSocket(`${serverUrl}/api/emergencies/${sessionId}/stream-socket`);
+    const timer = setTimeout(() => { socket.terminate(); reject(new Error("WebSocket recording timed out")); }, 5000);
+    socket.on("open", () => socket.send(JSON.stringify({ type: "authenticate", recoveryCode: created.body.recoveryCode, mimeType: "video/webm" })));
+    socket.on("message", data => {
+      const message = JSON.parse(data.toString());
+      if (message.type === "ready") { socket.send(recording); socket.send(JSON.stringify({ type: "complete" })); }
+      if (message.type === "completed") { clearTimeout(timer); resolve(message); }
+      if (message.type === "error") { clearTimeout(timer); reject(new Error(message.error)); }
+    });
+    socket.on("error", reject);
+  });
+  assert.equal(result.size, recording.length);
+  const downloaded = await request(app).get(`/api/emergencies/${created.body.emergency.id}/recording`).set("x-recovery-code", created.body.recoveryCode).expect(200);
+  assert.deepEqual(downloaded.body, recording);
 });
 
 test("Cameroon phone OTP creates a passwordless session", async () => {

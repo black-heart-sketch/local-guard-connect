@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Calendar, Edit, Mail, MapPin, Phone, Search, Shield, Trash2, Users } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { api } from "@/lib/api";
+import { apiFetch, type ApiUser } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,502 +9,152 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Search, Users, Edit, Trash2, Plus, UserPlus, Mail, Phone, MapPin, Calendar, Shield } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-interface Profile {
-  id: string;
-  user_id: string;
-  full_name: string | null;
-  phone: string | null;
-  location: string | null;
-  role: string | null;
-  avatar_url: string | null;
-  created_at: string;
-  updated_at: string;
+type Jurisdiction = Record<string, string>;
+type ManagedUser = ApiUser & { location?: Jurisdiction | string };
+
+const roles = ['citizen', 'dispatcher', 'police', 'gendarmerie', 'fire', 'medical', 'ngo', 'council', 'admin'] as const;
+
+function titleCase(value?: string) {
+  return value ? value.replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase()) : 'Citizen';
+}
+
+function formatLocation(location?: Jurisdiction | string) {
+  if (!location) return '';
+  if (typeof location === 'string') return location;
+  const orderedKeys = ['quarter', 'village', 'town', 'subdivision', 'division', 'region'];
+  const values = orderedKeys.map(key => location[key]).filter(Boolean);
+  return [...new Set(values)].join(', ');
+}
+
+function roleColor(role?: string) {
+  if (role === 'admin') return 'border-red-200 bg-red-100 text-red-800';
+  if (['police', 'gendarmerie', 'dispatcher'].includes(role || '')) return 'border-primary/20 bg-primary/10 text-primary';
+  if (role === 'citizen') return 'border-green-200 bg-green-100 text-green-800';
+  return 'border-amber-200 bg-amber-100 text-amber-800';
 }
 
 export function UserManagement() {
-  const { profile: currentUserProfile } = useAuth();
+  const { user: currentUser, profile: currentUserProfile } = useAuth();
   const { toast } = useToast();
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [filteredProfiles, setFilteredProfiles] = useState<Profile[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-  // Form states
-  const [formData, setFormData] = useState({
-    full_name: '',
-    phone: '',
-    location: '',
-    role: 'citizen'
-  });
-
-  useEffect(() => {
-    fetchAllProfiles();
-  }, []);
-
-  useEffect(() => {
-    filterProfiles();
-  }, [profiles, searchTerm, roleFilter]);
-
-  const fetchAllProfiles = async () => {
-    try {
-      const { data, error } = await api
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setProfiles(data || []);
-    } catch (error: any) {
-      console.error('Error fetching profiles:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch user profiles',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filterProfiles = () => {
-    let filtered = [...profiles];
-
-    if (searchTerm) {
-      filtered = filtered.filter(profile =>
-        profile.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        profile.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        profile.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        profile.role?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (roleFilter !== 'all') {
-      filtered = filtered.filter(profile => profile.role === roleFilter);
-    }
-
-    setFilteredProfiles(filtered);
-  };
-
-  const updateUserRole = async (profileId: string, newRole: string) => {
-    try {
-      const { error } = await (api as any)
-        .from('profiles')
-        .update({ 
-          role: newRole,
-          updated_at: new Date().toISOString() 
-        })
-        .eq('id', profileId);
-
-      if (error) throw error;
-
-      setProfiles(profiles.map(profile =>
-        profile.id === profileId ? { ...profile, role: newRole } : profile
-      ));
-
-      toast({
-        title: 'Success',
-        description: `User role updated to ${newRole}`,
-      });
-    } catch (error: any) {
-      console.error('Error updating role:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update user role',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const updateProfile = async (profileId: string, updates: Partial<Profile>) => {
-    try {
-      const { error } = await (api as any)
-        .from('profiles')
-        .update({ 
-          ...updates,
-          updated_at: new Date().toISOString() 
-        })
-        .eq('id', profileId);
-
-      if (error) throw error;
-
-      setProfiles(profiles.map(profile =>
-        profile.id === profileId ? { ...profile, ...updates } : profile
-      ));
-
-      setIsEditModalOpen(false);
-      setEditingProfile(null);
-      setFormData({ full_name: '', phone: '', location: '', role: 'citizen' });
-
-      toast({
-        title: 'Success',
-        description: 'User profile updated successfully',
-      });
-    } catch (error: any) {
-      console.error('Error updating profile:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update user profile',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const deleteProfile = async (profileId: string) => {
-    if (!confirm('Are you sure you want to delete this user profile? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const { error } = await api
-        .from('profiles')
-        .delete()
-        .eq('id', profileId);
-
-      if (error) throw error;
-
-      setProfiles(profiles.filter(profile => profile.id !== profileId));
-
-      toast({
-        title: 'Success',
-        description: 'User profile deleted successfully',
-      });
-    } catch (error: any) {
-      console.error('Error deleting profile:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete user profile',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const openEditModal = (profile: Profile) => {
-    setEditingProfile(profile);
-    setFormData({
-      full_name: profile.full_name || '',
-      phone: profile.phone || '',
-      location: profile.location || '',
-      role: profile.role || 'citizen'
-    });
-    setIsEditModalOpen(true);
-  };
-
-  const handleEditSubmit = () => {
-    if (editingProfile) {
-      updateProfile(editingProfile.id, formData);
-    }
-  };
-
-  const getRoleColor = (role: string | null) => {
-    switch (role) {
-      case 'admin':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'police':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'citizen':
-        return 'bg-green-100 text-green-800 border-green-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const getUniqueRoles = () => {
-    return [...new Set(profiles.map(profile => profile.role))].filter(Boolean);
-  };
-
-  const stats = {
-    total: profiles.length,
-    admin: profiles.filter(p => p.role === 'admin').length,
-    police: profiles.filter(p => p.role === 'police').length,
-    citizen: profiles.filter(p => p.role === 'citizen').length,
-  };
-
+  const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
+  const [formData, setFormData] = useState({ fullName: '', phone: '', town: '', role: 'citizen' });
   const canManageUsers = currentUserProfile?.role === 'admin';
-  console.log(`this user with role: ${currentUserProfile} can manage users: ${canManageUsers}`);
 
-  if (!canManageUsers) {
-    return (
-      <Alert>
-        <Shield className="h-4 w-4" />
-        <AlertDescription>
-          You don't have permission to manage users. Admin access required.
-        </AlertDescription>
-      </Alert>
-    );
+  useEffect(() => {
+    if (!canManageUsers) { setLoading(false); return; }
+    let active = true;
+    void apiFetch<ManagedUser[]>('/users')
+      .then(data => { if (active) setUsers(data); })
+      .catch(error => toast({ title: 'Unable to load users', description: error instanceof Error ? error.message : 'User list request failed', variant: 'destructive' }))
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [canManageUsers, toast]);
+
+  const filteredUsers = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return users.filter(user => {
+      if (roleFilter !== 'all' && user.role !== roleFilter) return false;
+      if (!query) return true;
+      return [user.full_name, user.email, user.phone, user.role, formatLocation(user.location)]
+        .some(value => value?.toLowerCase().includes(query));
+    });
+  }, [roleFilter, searchTerm, users]);
+
+  const stats = useMemo(() => ({
+    total: users.length,
+    admins: users.filter(user => user.role === 'admin').length,
+    responders: users.filter(user => ['dispatcher', 'police', 'gendarmerie', 'fire', 'medical'].includes(user.role || '')).length,
+    citizens: users.filter(user => user.role === 'citizen').length,
+  }), [users]);
+
+  async function patchUser(userId: string, updates: Record<string, unknown>, successMessage: string) {
+    setSaving(true);
+    try {
+      const updated = await apiFetch<ManagedUser>(`/users/${userId}`, { method: 'PATCH', body: JSON.stringify(updates) });
+      setUsers(current => current.map(user => user.id === userId ? updated : user));
+      toast({ title: 'Saved', description: successMessage });
+      return updated;
+    } catch (error) {
+      toast({ title: 'Update failed', description: error instanceof Error ? error.message : 'Unable to update this user', variant: 'destructive' });
+      return null;
+    } finally { setSaving(false); }
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-          </CardContent>
-        </Card>
+  async function updateRole(userId: string, role: string) {
+    await patchUser(userId, { role }, `Role changed to ${titleCase(role)}`);
+  }
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Admins</CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.admin}</div>
-          </CardContent>
-        </Card>
+  function openEdit(user: ManagedUser) {
+    const jurisdiction = typeof user.location === 'object' && user.location ? user.location : {};
+    setEditingUser(user);
+    setFormData({ fullName: user.full_name || '', phone: user.phone || '', town: jurisdiction.town || (typeof user.location === 'string' ? user.location : ''), role: user.role || 'citizen' });
+  }
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Police</CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.police}</div>
-          </CardContent>
-        </Card>
+  async function submitEdit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editingUser) return;
+    const existingJurisdiction = typeof editingUser.location === 'object' && editingUser.location ? editingUser.location : {};
+    const updated = await patchUser(editingUser.id, { fullName: formData.fullName, phone: formData.phone || null, role: formData.role, jurisdiction: { ...existingJurisdiction, town: formData.town } }, 'User profile updated');
+    if (updated) setEditingUser(null);
+  }
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Citizens</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.citizen}</div>
-          </CardContent>
-        </Card>
-      </div>
+  async function deactivateUser(user: ManagedUser) {
+    if (user.id === currentUser?.id) return;
+    if (!window.confirm(`Deactivate ${user.full_name || user.email || 'this user'}? They will no longer be able to sign in.`)) return;
+    try {
+      await apiFetch(`/users/${user.id}`, { method: 'DELETE' });
+      setUsers(current => current.filter(item => item.id !== user.id));
+      toast({ title: 'User deactivated', description: 'The account can no longer sign in.' });
+    } catch (error) {
+      toast({ title: 'Deactivation failed', description: error instanceof Error ? error.message : 'Unable to deactivate this user', variant: 'destructive' });
+    }
+  }
 
-      {/* Filters and Actions */}
-      if (!canManageUsers) {
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Search className="w-5 h-5" />
-            <CardTitle>User Management</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search users..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
+  if (!canManageUsers) return <Alert><Shield className="h-4 w-4" /><AlertDescription>You do not have permission to manage users. Administrator access is required.</AlertDescription></Alert>;
 
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                {getUniqueRoles().map((role) => (
-                  <SelectItem key={role} value={role}>
-                    {role?.charAt(0).toUpperCase() + role?.slice(1)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="text-sm text-muted-foreground flex items-center">
-              Showing {filteredProfiles.length} of {profiles.length} users
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      }
-      {/* Users List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>System Users</CardTitle>
-          <CardDescription>
-            Manage user profiles, roles, and permissions
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : filteredProfiles.length === 0 ? (
-            <div className="text-center py-8">
-              <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">No users found</h3>
-              <p className="text-muted-foreground">
-                {searchTerm || roleFilter !== 'all'
-                  ? 'Try adjusting your filters'
-                  : 'No users have been registered yet'}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredProfiles.map((profile) => (
-                <div
-                  key={profile.id}
-                  className="border border-border rounded-lg p-6 hover:bg-muted/50 transition-all"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-foreground text-lg">
-                          {profile.full_name || 'Unnamed User'}
-                        </h3>
-                        <Badge className={getRoleColor(profile.role)}>
-                          {profile.role?.charAt(0).toUpperCase() + profile.role?.slice(1)}
-                        </Badge>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground">
-                        {profile.phone && (
-                          <div className="flex items-center">
-                            <Phone className="w-4 h-4 mr-2" />
-                            {profile.phone}
-                          </div>
-                        )}
-                        {profile.location && (
-                          <div className="flex items-center">
-                            <MapPin className="w-4 h-4 mr-2" />
-                            {profile.location}
-                          </div>
-                        )}
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-2" />
-                          Joined {formatDate(profile.created_at)}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-2 items-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditModal(profile)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      
-                      <Select
-                        value={profile.role || 'citizen'}
-                        onValueChange={(value) => updateUserRole(profile.id, value)}
-                      >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="citizen">Citizen</SelectItem>
-                          <SelectItem value="police">Police</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteProfile(profile.id)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Edit User Modal */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit User Profile</DialogTitle>
-            <DialogDescription>
-              Update user information and role
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="full_name">Full Name</Label>
-              <Input
-                id="full_name"
-                value={formData.full_name}
-                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                placeholder="Enter full name"
-              />
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="Enter phone number"
-              />
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                placeholder="Enter location"
-              />
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="role">Role</Label>
-              <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="citizen">Citizen</SelectItem>
-                  <SelectItem value="police">Police</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleEditSubmit}>
-              Update Profile
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+  return <div className="space-y-6">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {[
+        ['Total users', stats.total, Users], ['Administrators', stats.admins, Shield], ['Responders', stats.responders, Shield], ['Citizens', stats.citizens, Users],
+      ].map(([label, value, Icon]) => <Card key={String(label)}><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">{String(label)}</CardTitle><Icon className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{String(value)}</div></CardContent></Card>)}
     </div>
-  );
+
+    <Card>
+      <CardHeader><CardTitle>User management</CardTitle><CardDescription>Search accounts and manage roles, contact information, and access.</CardDescription></CardHeader>
+      <CardContent><div className="grid gap-3 md:grid-cols-[1fr_14rem_auto]"><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input aria-label="Search users" placeholder="Search name, email, phone or location" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" /></div><Select value={roleFilter} onValueChange={setRoleFilter}><SelectTrigger aria-label="Filter by role"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All roles</SelectItem>{roles.map(role => <SelectItem key={role} value={role}>{titleCase(role)}</SelectItem>)}</SelectContent></Select><div className="flex items-center text-sm text-muted-foreground">{filteredUsers.length} of {users.length} users</div></div></CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader><CardTitle>System users</CardTitle><CardDescription>Only administrators can change or deactivate accounts.</CardDescription></CardHeader>
+      <CardContent>
+        {loading ? <div className="flex justify-center py-10"><div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" /></div> : filteredUsers.length === 0 ? <div className="py-10 text-center text-muted-foreground"><Users className="mx-auto mb-3 h-10 w-10" /><p>No users match the current filters.</p></div> : <div className="space-y-3">
+          {filteredUsers.map(user => {
+            const location = formatLocation(user.location);
+            const isCurrentUser = user.id === currentUser?.id;
+            return <article key={user.id} className="rounded-lg border p-4 sm:p-5">
+              <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold">{user.full_name || 'Unnamed user'}</h3><Badge className={roleColor(user.role)}>{titleCase(user.role)}</Badge>{isCurrentUser && <Badge variant="outline">You</Badge>}</div><div className="mt-3 grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+                  {user.email && <span className="flex items-center gap-2"><Mail className="h-4 w-4" />{user.email}</span>}
+                  {user.phone && <span className="flex items-center gap-2"><Phone className="h-4 w-4" />{user.phone}</span>}
+                  {location && <span className="flex items-center gap-2"><MapPin className="h-4 w-4" />{location}</span>}
+                  {user.created_at && <span className="flex items-center gap-2"><Calendar className="h-4 w-4" />Joined {new Date(user.created_at).toLocaleDateString()}</span>}
+                </div></div>
+                <div className="flex flex-wrap items-center gap-2"><Button variant="outline" size="sm" onClick={() => openEdit(user)}><Edit />Edit</Button><Select value={user.role || 'citizen'} onValueChange={role => void updateRole(user.id, role)} disabled={saving || isCurrentUser}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent>{roles.map(role => <SelectItem key={role} value={role}>{titleCase(role)}</SelectItem>)}</SelectContent></Select><Button variant="ghost" size="sm" disabled={isCurrentUser} onClick={() => void deactivateUser(user)} className="text-destructive hover:text-destructive"><Trash2 />Deactivate</Button></div>
+              </div>
+            </article>;
+          })}
+        </div>}
+      </CardContent>
+    </Card>
+
+    <Dialog open={Boolean(editingUser)} onOpenChange={open => { if (!open) setEditingUser(null); }}><DialogContent><DialogHeader><DialogTitle>Edit user</DialogTitle><DialogDescription>Update the account information and operational role.</DialogDescription></DialogHeader><form className="space-y-4" onSubmit={submitEdit}><div className="space-y-2"><Label htmlFor="managed-name">Full name</Label><Input id="managed-name" value={formData.fullName} onChange={event => setFormData(current => ({ ...current, fullName: event.target.value }))} /></div><div className="space-y-2"><Label htmlFor="managed-phone">Cameroon phone number</Label><Input id="managed-phone" value={formData.phone} onChange={event => setFormData(current => ({ ...current, phone: event.target.value }))} placeholder="+2376XXXXXXXX" /></div><div className="space-y-2"><Label htmlFor="managed-town">Town</Label><Input id="managed-town" value={formData.town} onChange={event => setFormData(current => ({ ...current, town: event.target.value }))} /></div><div className="space-y-2"><Label>Role</Label><Select value={formData.role} onValueChange={role => setFormData(current => ({ ...current, role }))} disabled={editingUser?.id === currentUser?.id}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{roles.map(role => <SelectItem key={role} value={role}>{titleCase(role)}</SelectItem>)}</SelectContent></Select></div><div className="flex justify-end gap-2 pt-2"><Button type="button" variant="outline" onClick={() => setEditingUser(null)}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</Button></div></form></DialogContent></Dialog>
+  </div>;
 }

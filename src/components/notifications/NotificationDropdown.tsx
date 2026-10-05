@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, Check, X, AlertCircle, Info, Users } from "lucide-react";
+import { Bell, Check, AlertCircle, Info, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { api } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -36,22 +36,9 @@ export const NotificationDropdown = () => {
     if (!user) return;
 
     try {
-      const { data, error } = await (api as any)
-        .from('notifications')
-        .select('*')
-        .or(`type.eq.general,and(type.eq.registered,target_user_id.is.null),and(type.eq.targeted,target_user_id.eq.${user.id})`)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) {
-        console.error('Error fetching notifications:', error);
-        return;
-      }
-
-      if (data) {
-        setNotifications(data as Notification[]);
-        setUnreadCount(data.filter((n: any) => !n.is_read).length);
-      }
+      const data = await apiFetch<Notification[]>('/notifications');
+      setNotifications(data.slice(0, 20));
+      setUnreadCount(data.filter(notification => !notification.is_read).length);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
@@ -59,19 +46,7 @@ export const NotificationDropdown = () => {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      const { error } = await (api as any)
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notificationId);
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to mark notification as read",
-          variant: "destructive"
-        });
-        return;
-      }
+      await apiFetch(`/notifications/${notificationId}/read`, { method: 'PATCH', body: JSON.stringify({}) });
 
       setNotifications(prev => 
         prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
@@ -90,19 +65,7 @@ export const NotificationDropdown = () => {
       
       if (unreadIds.length === 0) return;
 
-      const { error } = await (api as any)
-        .from('notifications')
-        .update({ is_read: true })
-        .in('id', unreadIds);
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to mark all notifications as read",
-          variant: "destructive"
-        });
-        return;
-      }
+      await Promise.all(unreadIds.map(id => apiFetch(`/notifications/${id}/read`, { method: 'PATCH', body: JSON.stringify({}) })));
 
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
@@ -119,7 +82,7 @@ export const NotificationDropdown = () => {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'general':
-        return <Info className="h-4 w-4 text-blue-500" />;
+        return <Info className="h-4 w-4 text-primary" />;
       case 'registered':
         return <Users className="h-4 w-4 text-green-500" />;
       case 'targeted':
@@ -132,7 +95,7 @@ export const NotificationDropdown = () => {
   const getNotificationBadgeColor = (type: string) => {
     switch (type) {
       case 'general':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-primary/10 text-primary';
       case 'registered':
         return 'bg-green-100 text-green-800';
       case 'targeted':
@@ -200,7 +163,7 @@ export const NotificationDropdown = () => {
                 className="p-0 cursor-pointer"
                 onClick={() => !notification.is_read && markAsRead(notification.id)}
               >
-                <div className={`w-full p-3 ${!notification.is_read ? 'bg-blue-50' : ''}`}>
+                <div className={`w-full p-3 ${!notification.is_read ? 'bg-primary/5' : ''}`}>
                   <div className="flex items-start gap-3">
                     <div className="mt-1">
                       {getNotificationIcon(notification.type)}
@@ -211,7 +174,7 @@ export const NotificationDropdown = () => {
                           {notification.title}
                         </h4>
                         {!notification.is_read && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
+                          <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0" />
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mb-2 line-clamp-2">

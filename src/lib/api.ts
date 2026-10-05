@@ -19,7 +19,11 @@ type AuthListener = (event: AuthEvent, session: ApiSession | null) => void;
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const listeners = new Set<AuthListener>();
-const emergencyRecovery = new Map<string, string>();
+
+export function apiMediaUrl(path: string) {
+  const resolvedPath = path.startsWith('/api/') ? path.slice(4) : path;
+  return `${API_URL}${resolvedPath}`;
+}
 
 function token() { return localStorage.getItem("crimex_token"); }
 function storeToken(value?: string) {
@@ -43,28 +47,47 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 export async function apiBlob(path: string): Promise<Blob> {
   const headers = new Headers();
   if (token()) headers.set("Authorization", `Bearer ${token()}`);
-  const resolvedPath = path.startsWith('/api/') ? path.slice(4) : path;
-  const response = await fetch(`${API_URL}${resolvedPath}`, { headers, credentials: "include" });
+  const response = await fetch(apiMediaUrl(path), { headers, credentials: "include" });
   if (!response.ok) throw new Error(`Download failed (${response.status})`);
   return response.blob();
 }
 
 export async function createEmergencyRecordingStream(input: { recordingSessionId: string; type: string; location?: { latitude: number; longitude: number; accuracy?: number } }) {
   const created = await apiFetch<{ emergency: { id: string; reference: string }; recoveryCode?: string }>('/emergencies', { method: 'POST', body: JSON.stringify({ recordingSessionId: input.recordingSessionId, type: input.type, ...(input.location || {}) }) });
-  const transport = new TransformStream<Uint8Array, Uint8Array>();
-  const headers = new Headers({ 'Content-Type': 'video/webm' });
-  if (token()) headers.set('Authorization', `Bearer ${token()}`);
-  if (created.recoveryCode) {
-    headers.set('x-recovery-code', created.recoveryCode);
-    emergencyRecovery.set(input.recordingSessionId, created.recoveryCode);
-  }
-  const request: RequestInit & { duplex: 'half' } = { method: 'POST', headers, body: transport.readable, credentials: 'include', duplex: 'half' };
-  const completed = fetch(`${API_URL}/emergencies/${encodeURIComponent(input.recordingSessionId)}/stream`, request).then(async response => {
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || `Recording stream failed (${response.status})`);
-    return body as { received: boolean; size: number; sessionId: string };
+  const apiBase = API_URL.startsWith('http') ? new URL(API_URL) : new URL(API_URL, window.location.origin);
+  apiBase.protocol = apiBase.protocol === 'https:' ? 'wss:' : 'ws:';
+  apiBase.pathname = `${apiBase.pathname.replace(/\/$/, '')}/emergencies/${encodeURIComponent(input.recordingSessionId)}/stream-socket`;
+  const socket = new WebSocket(apiBase);
+  socket.binaryType = 'arraybuffer';
+  let settled = false;
+  let resolveReady: () => void;
+  let rejectReady: (reason: Error) => void;
+  const ready = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
+  let resolveCompleted: (value: { received: boolean; size: number; sessionId: string }) => void;
+  let rejectCompleted: (reason: Error) => void;
+  const completed = new Promise<{ received: boolean; size: number; sessionId: string }>((resolve, reject) => { resolveCompleted = resolve; rejectCompleted = reject; });
+  socket.addEventListener('open', () => socket.send(JSON.stringify({ type: 'authenticate', token: token(), recoveryCode: created.recoveryCode, mimeType: 'video/webm' })));
+  socket.addEventListener('message', event => {
+    if (typeof event.data !== 'string') return;
+    const response = JSON.parse(event.data);
+    if (response.type === 'ready') resolveReady();
+    if (response.type === 'completed') { settled = true; resolveCompleted(response); }
+    if (response.type === 'error') { const error = new Error(response.error || 'Recording stream failed'); rejectReady(error); if (!settled) { settled = true; rejectCompleted(error); } }
   });
-  return { emergency: created.emergency, recoveryCode: created.recoveryCode, writer: transport.writable.getWriter(), completed };
+  socket.addEventListener('error', () => { const error = new Error('Recording stream connection failed'); rejectReady(error); if (!settled) { settled = true; rejectCompleted(error); } });
+  socket.addEventListener('close', event => { if (!settled) { settled = true; rejectCompleted(new Error(event.reason || 'Recording stream closed before completion')); } });
+
+  const waitForCapacity = async () => {
+    while (socket.bufferedAmount > 1024 * 1024) await new Promise(resolve => setTimeout(resolve, 25));
+  };
+  const writer = {
+    async write(bytes: Uint8Array) { await ready; await waitForCapacity(); if (socket.readyState !== WebSocket.OPEN) throw new Error('Recording stream is not open'); socket.send(bytes); },
+    async close() { await ready; await waitForCapacity(); socket.send(JSON.stringify({ type: 'complete' })); },
+    async abort(reason?: unknown) { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'abort', reason: String(reason || '') })); socket.close(1000, 'Recording cancelled'); },
+  };
+  void completed.catch(() => undefined);
+  await ready;
+  return { emergency: created.emergency, recoveryCode: created.recoveryCode, writer, completed };
 }
 
 const auth = {
@@ -127,6 +150,7 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: Error | null }
   private operation: Operation = "select";
   private payload: unknown;
   private filters: Record<string, unknown> = {};
+  private inFilters: Record<string, unknown[]> = {};
   private sort?: { field: string; ascending: boolean };
   private wantSingle = false;
   constructor(private table: string) {}
@@ -135,6 +159,7 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: Error | null }
   update(payload: unknown) { this.operation = "update"; this.payload = payload; return this; }
   delete() { this.operation = "delete"; return this; }
   eq(field: string, value: unknown) { this.filters[field] = value; return this; }
+  in(field: string, values: unknown[]) { this.inFilters[field] = values; return this; }
   order(field: string, opts: { ascending?: boolean } = {}) { this.sort = { field, ascending: opts.ascending ?? true }; return this; }
   single() { this.wantSingle = true; return this; }
   maybeSingle() { this.wantSingle = true; return this; }
@@ -179,6 +204,7 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: Error | null }
       let data = await apiFetch<unknown>(path, { method, body });
       if (this.table === "profiles" && !Array.isArray(data) && (data as { profile?: unknown })?.profile) data = (data as { profile: unknown }).profile;
       if (this.table === "reports" && !Array.isArray(data) && (data as { report?: unknown })?.report) data = (data as { report: unknown }).report;
+      if (Array.isArray(data) && Object.keys(this.inFilters).length) data = data.filter(item => Object.entries(this.inFilters).every(([field, values]) => values.map(String).includes(String((item as Record<string, unknown>)[field]))));
       if (Array.isArray(data) && this.sort) data.sort((a, b) => { const av = (a as Record<string, unknown>)[this.sort!.field]; const bv = (b as Record<string, unknown>)[this.sort!.field]; return (String(av).localeCompare(String(bv))) * (this.sort!.ascending ? 1 : -1); });
       if (this.wantSingle && Array.isArray(data)) data = data[0] || null;
       return { data, error: null };

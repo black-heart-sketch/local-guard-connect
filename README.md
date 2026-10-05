@@ -21,6 +21,7 @@ Requirements: Node.js 22+ and MongoDB 7+.
 cp .env.example .env
 npm install
 npm run db:migrate
+npm run db:seed
 npm run dev
 ```
 
@@ -33,10 +34,13 @@ npm run dev          # web and API
 npm run dev:web      # web only
 npm run server:dev   # API only
 npm run db:migrate   # apply pending MongoDB migrations
+npm run db:seed      # idempotent Cameroon demo users, agencies and cases
 npm run build        # production web build
 npm run test:api     # API tests
 npm run data:retention # purge expired records not under legal hold
 ```
+
+The login page includes quick-access buttons for the seeded citizen, dispatcher, police and administrator accounts. Their default password is `Cameroon@2026`. Change `SEED_PASSWORD` when creating a custom demo dataset; hide the quick-access panel with `VITE_ENABLE_QUICK_LOGIN=false`. Seeding is blocked in production unless `ALLOW_PRODUCTION_SEED=true` is deliberately configured.
 
 ## Backend organization
 
@@ -49,7 +53,7 @@ Each persisted domain has a dedicated model, controller, and route module. For e
 - Region/division/subdivision/council location fields, GPS, and privacy-preserving public map points
 - Offline report queue, low-data image compression, SMS report fallback, and PWA shell
 - Optional standards-based browser push notifications using VAPID
-- Protected GBV/child-safety reports, trusted emergency contacts, and private evidence
+- Protected GBV/child-safety reports, trusted emergency contacts, and a single continuous emergency recording stream
 - Verified agencies, jurisdiction workflows, community moderation, audit logs, and data-subject requests
 - Optional DigiPay Mobile Money support; incident and emergency reporting never requires payment
 

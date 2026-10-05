@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api, apiBlob } from "@/lib/api";
+import { api, apiBlob, apiMediaUrl } from "@/lib/api";
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,8 +23,7 @@ interface EmergencyLog {
   location_data: any;
   video_path: string | null;
   recording_session_id: string | null;
-  chunk_count: number;
-  chunk_size: number;
+  stream_size: number;
   created_at: string;
   updated_at: string;
   user_profile?: {
@@ -50,6 +49,7 @@ export const EmergencyLogsViewer = () => {
   const [logToUpdate, setLogToUpdate] = useState<EmergencyLog | null>(null);
   const [newStatus, setNewStatus] = useState<EmergencyStatus | ''>('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [videoError, setVideoError] = useState(false);
 
   const statusOptions: EmergencyStatus[] = ['queued', 'acknowledged', 'dispatched', 'completed', 'failed', 'cancelled'];
 
@@ -118,6 +118,7 @@ export const EmergencyLogsViewer = () => {
   };
 
   const openLogDetails = (log: EmergencyLog) => {
+    setVideoError(false);
     setSelectedLog(log);
     setIsDetailModalOpen(true);
   };
@@ -516,10 +517,10 @@ export const EmergencyLogsViewer = () => {
                   </div>
                   <div className="grid grid-cols-3 gap-4 text-sm">
                     <div>
-                      <span className="text-muted-foreground">Chunks:</span> {log.chunk_count}
+                      <span className="text-muted-foreground">Transfer:</span> Continuous stream
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Size:</span> {formatFileSize(log.chunk_size || 0)}
+                      <span className="text-muted-foreground">Size:</span> {formatFileSize(log.stream_size || 0)}
                     </div>
                     {log.location_data && (
                       <div>
@@ -535,7 +536,7 @@ export const EmergencyLogsViewer = () => {
       </Card>
 
       {/* Log Details Modal */}
-      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
+      <Dialog open={isDetailModalOpen} onOpenChange={(open) => open ? setIsDetailModalOpen(true) : closeLogDetails()}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
@@ -550,7 +551,7 @@ export const EmergencyLogsViewer = () => {
           {selectedLog && (
             <div className="flex-1 overflow-y-auto space-y-6 pr-2">
               {/* Basic Information */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <h4 className="font-medium mb-2">Emergency Information</h4>
                   <div className="space-y-2 text-sm">
@@ -574,14 +575,41 @@ export const EmergencyLogsViewer = () => {
 
               {/* Video Information */}
               {selectedLog.video_path && (
-                <div>
-                  <h4 className="font-medium mb-2">Video Information</h4>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div><span className="text-muted-foreground">Chunks:</span> {selectedLog.chunk_count}</div>
-                    <div><span className="text-muted-foreground">Size:</span> {formatFileSize(selectedLog.chunk_size || 0)}</div>
-                    <div><span className="text-muted-foreground">Path:</span> {selectedLog.video_path}</div>
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Emergency Video</h4>
+                    <div className="overflow-hidden rounded-xl border border-border bg-black shadow-sm">
+                      <video
+                        key={selectedLog.id}
+                        src={apiMediaUrl(selectedLog.video_path)}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        crossOrigin="use-credentials"
+                        className="aspect-video w-full bg-black object-contain"
+                        aria-label={`Emergency ${selectedLog.emergency_type} recording`}
+                        onLoadedData={() => setVideoError(false)}
+                        onError={() => setVideoError(true)}
+                      >
+                        Your browser does not support embedded video playback.
+                      </video>
+                    </div>
+                    {videoError && (
+                      <p className="mt-2 text-sm text-destructive" role="alert">
+                        This recording could not be played in the browser. You can still download it below.
+                      </p>
+                    )}
                   </div>
-                  <div className="mt-4 flex gap-2">
+
+                  <div>
+                    <h4 className="font-medium mb-2">Video Information</h4>
+                    <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
+                      <div><span className="text-muted-foreground">Transfer:</span> Continuous stream</div>
+                      <div><span className="text-muted-foreground">Size:</span> {formatFileSize(selectedLog.stream_size || 0)}</div>
+                      <div className="break-all"><span className="text-muted-foreground">Path:</span> {selectedLog.video_path}</div>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
                     <Button onClick={() => downloadVideo(selectedLog.video_path!)}>
                       <Download className="w-4 h-4 mr-2" />
                       Download Video

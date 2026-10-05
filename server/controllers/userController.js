@@ -69,7 +69,7 @@ export function avatar(req, res) { res.sendFile(path.resolve(config.uploadDir, "
 export async function listUsers(_req, res, next) { try { res.json((await User.find().sort({ createdAt: -1 })).map(publicUser)); } catch (error) { next(error); } }
 export async function updateUser(req, res, next) {
   try {
-    const allowed = ["role", "active", "verified", "jurisdiction"];
+    const allowed = ["fullName", "phone", "locale", "role", "active", "verified", "jurisdiction"];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
     const user = await User.findByIdAndUpdate(req.params.id, updates, { returnDocument: "after", runValidators: true });
     if (!user) return res.status(404).json({ error: "User not found" });
@@ -77,4 +77,4 @@ export async function updateUser(req, res, next) {
     res.json(publicUser(user));
   } catch (error) { next(error); }
 }
-export async function deactivateUser(req, res, next) { try { const user = await User.findByIdAndUpdate(req.params.id, { active: false }, { returnDocument: "after" }); res.json(publicUser(user)); } catch (error) { next(error); } }
+export async function deactivateUser(req, res, next) { try { const user = await User.findByIdAndUpdate(req.params.id, { active: false }, { returnDocument: "after" }); if (!user) return res.status(404).json({ error: "User not found" }); res.json(publicUser(user)); } catch (error) { next(error); } }

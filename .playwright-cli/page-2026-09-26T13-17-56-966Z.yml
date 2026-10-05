@@ -1,0 +1,104 @@
+- generic [ref=e7]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e372]:
+    - banner [ref=e373]:
+      - generic [ref=e374]: "Emergency: Police 117 · Gendarmerie 113 · Fire 118 · SAMU 119"
+      - generic [ref=e380]:
+        - link "CrimeX CrimeX Cameroon safety network" [ref=e381] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e382]:
+            - img "CrimeX" [ref=e385]
+            - generic [ref=e386]:
+              - text: CrimeX
+              - generic [ref=e387]: Cameroon safety network
+        - navigation [ref=e388]:
+          - button "Features" [ref=e389] [cursor=pointer]
+          - button "How it works" [ref=e393] [cursor=pointer]
+          - link "Community" [ref=e400] [cursor=pointer]:
+            - /url: /community
+          - link "Partners" [ref=e407] [cursor=pointer]:
+            - /url: /partners
+          - link "Track report" [ref=e411] [cursor=pointer]:
+            - /url: /track
+          - button "Emergency" [ref=e416] [cursor=pointer]
+        - generic [ref=e421]:
+          - button "Change language" [ref=e422] [cursor=pointer]: Français
+          - generic [ref=e423]:
+            - button "4" [ref=e424] [cursor=pointer]
+            - generic [ref=e431] [cursor=pointer]:
+              - generic [ref=e432]: CrimeX Administrator
+              - generic [ref=e433]: Community Member
+    - banner [ref=e436]:
+      - generic [ref=e438]:
+        - generic [ref=e439]:
+          - heading "Admin Dashboard" [level=1] [ref=e440]
+          - paragraph [ref=e441]: Manage reports, users, and system settings
+        - generic [ref=e442]: ADMIN
+    - main [ref=e443]:
+      - generic [ref=e444]:
+        - tablist [ref=e445]:
+          - tab "Crime Reports" [selected] [ref=e446] [cursor=pointer]
+          - tab "User Management" [ref=e450] [cursor=pointer]
+          - tab "Notifications" [ref=e456] [cursor=pointer]
+          - tab "Emergency Logs" [ref=e460] [cursor=pointer]
+          - tab "Partners" [ref=e463] [cursor=pointer]
+          - tab "Moderation" [ref=e468] [cursor=pointer]
+        - tabpanel "Crime Reports" [ref=e472]:
+          - generic [ref=e473]:
+            - generic [ref=e474] [cursor=pointer]:
+              - heading "Total Reports" [level=3] [ref=e476]
+              - generic [ref=e480]: "2"
+            - generic [ref=e482] [cursor=pointer]:
+              - heading "Received" [level=3] [ref=e484]
+              - generic [ref=e488]: "0"
+            - generic [ref=e490] [cursor=pointer]:
+              - heading "Assigned" [level=3] [ref=e492]
+              - generic [ref=e496]: "1"
+            - generic [ref=e498] [cursor=pointer]:
+              - heading "Resolved" [level=3] [ref=e500]
+              - generic [ref=e504]: "1"
+          - generic [ref=e506]:
+            - generic [ref=e507]:
+              - heading "Filters" [level=3] [ref=e511]
+              - button "View on Map" [ref=e512] [cursor=pointer]
+            - generic [ref=e514]:
+              - textbox "Search reports..." [ref=e519]
+              - combobox [ref=e520] [cursor=pointer]:
+                - generic: All Statuses
+              - combobox [ref=e523] [cursor=pointer]:
+                - generic: All Crime Types
+              - generic [ref=e526]: Showing 2 of 2 reports
+          - generic [ref=e527]:
+            - generic [ref=e528]:
+              - heading "Crime Reports" [level=3] [ref=e529]
+              - paragraph [ref=e530]: Click on any report to view detailed information and attachments
+            - generic [ref=e532]:
+              - generic [ref=e533] [cursor=pointer]:
+                - generic [ref=e534]:
+                  - generic [ref=e535]:
+                    - generic [ref=e536]:
+                      - heading "road_safety" [level=3] [ref=e537]
+                      - generic [ref=e538]: resolved
+                    - generic [ref=e539]: Carrefour Warda, Yaoundé
+                    - generic [ref=e543]: Sep 26, 2026, 01:50 PM
+                  - generic [ref=e546]:
+                    - button [ref=e547]
+                    - combobox [ref=e548]:
+                      - generic: Resolved
+                - paragraph [ref=e551]: Resolved road obstruction previously reported near Carrefour Warda.
+              - generic [ref=e552] [cursor=pointer]:
+                - generic [ref=e553]:
+                  - generic [ref=e554]:
+                    - generic [ref=e555]:
+                      - heading "theft" [level=3] [ref=e556]
+                      - generic [ref=e557]: assigned
+                    - generic [ref=e558]: Marché Central, Douala
+                    - generic [ref=e562]: Sep 26, 2026, 01:50 PM
+                  - generic [ref=e565]:
+                    - button [ref=e566]
+                    - combobox [ref=e567]:
+                      - generic: Assigned
+                - paragraph [ref=e570]: Motorcycle theft reported near Marché Central.
+  - button "EMERGENCY" [ref=e361] [cursor=pointer]

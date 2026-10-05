@@ -36,7 +36,8 @@ export function createApp() {
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true }));
   if (config.nodeEnv !== "test") app.use(morgan("combined"));
-  app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true }));
+  const authenticationLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true });
+  app.use(["/api/auth/login", "/api/auth/register", "/api/auth/otp/request", "/api/auth/otp/verify"], authenticationLimiter);
   app.use("/api", optionalAuth, configRoutes, userRoutes, otpCodeRoutes, channelEventRoutes, dataSubjectRequestRoutes, paymentRoutes, pushSubscriptionRoutes, reportRoutes, notificationRoutes, communityPostRoutes, emergencyRoutes, agencyRoutes, auditLogRoutes, migrationRoutes);
   if (config.nodeEnv === "production") {
     const dist = path.resolve("dist");

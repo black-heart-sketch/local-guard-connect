@@ -24,7 +24,6 @@ const emergencySchema = new Schema({
     startedAt: Date,
     completedAt: Date,
   },
-  chunks: [{ storedName: String, size: Number, index: Number, createdAt: { type: Date, default: Date.now } }],
   trustedContactsNotified: { type: Boolean, default: false },
   authorityNotified: { type: Boolean, default: false },
   legalHold: { type: Boolean, default: false },

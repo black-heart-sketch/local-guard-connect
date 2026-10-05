@@ -1,927 +1,200 @@
-import { AlertTriangle, AlertCircle, Video, Mic, Square, MapPin, Phone, Users, Shield, Zap } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useState, useRef, useEffect } from "react";
-import { api } from "@/lib/api";
-import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
+import { AlertCircle, AlertTriangle, Camera, MapPin, Mic, Phone, Shield, Square, Video } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { createEmergencyRecordingStream } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
+
+type StreamUpload = Awaited<ReturnType<typeof createEmergencyRecordingStream>>;
+
+function message(reason: unknown) {
+  return reason instanceof Error ? reason.message : 'Unexpected recording error';
+}
 
 const EmergencyButton = () => {
-  const { user } = useAuth();
   const { toast } = useToast();
-  const [isRecording, setIsRecording] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [locationStatus, setLocationStatus] = useState('Location not requested');
+  const [transferStatus, setTransferStatus] = useState('');
+  const [streamedBytes, setStreamedBytes] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
-  const [locationSent, setLocationSent] = useState(false);
-  const [locationStatus, setLocationStatus] = useState<string>('');
-  const [emergencyContacted, setEmergencyContacted] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<string>('');
-  const [chunkCount, setChunkCount] = useState(0);
-  const [totalUploadSize, setTotalUploadSize] = useState(0);
-  const [lastChunkTime, setLastChunkTime] = useState<number | null>(null);
-  
-  const chunks = useRef<Blob[]>([]);
-  const durationInterval = useRef<NodeJS.Timeout | null>(null);
-  const uploadInterval = useRef<NodeJS.Timeout | null>(null);
-  const currentLocation = useRef<GeolocationPosition | null>(null);
-  const sessionStartTime = useRef<number | null>(null);
-  const [savedChunks, setSavedChunks] = useState<Blob[]>([]);
-  const [recordingSessionId, setRecordingSessionId] = useState<string | null>(null);
-  const [isFirstChunk, setIsFirstChunk] = useState(true);
-  const [isStopping, setIsStopping] = useState(false);
-  const recordingSessionIdRef = useRef<string | null>(null);
-  const isFirstChunkRef = useRef<boolean>(true);
 
-  const downloadRecording = () => {
-    if (savedChunks.length === 0) {
-      logEvent('DOWNLOAD_FAILED_NO_CHUNKS');
-      toast({
-        title: "Download Failed",
-        description: "No recording data available to download",
-        variant: "destructive",
-        duration: 3000,
-      });
-      return;
-    }
-  
-    logEvent('DOWNLOAD_START', { chunkCount: savedChunks.length });
-    
-    const blob = new Blob(savedChunks, { type: "video/webm;codecs=vp9,opus" });
-    const url = URL.createObjectURL(blob);
-  
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `emergency-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  
-    URL.revokeObjectURL(url);
-    
-    logEvent('DOWNLOAD_COMPLETE', { 
-      blobSize: blob.size,
-      fileName: a.download 
-    });
-    
-    toast({
-      title: "Recording Downloaded",
-      description: `File saved as ${a.download}`,
-      duration: 3000,
-    });
-  };
-  
-  // Enhanced logging function
-  const logEvent = (event: string, data?: any) => {
-    const timestamp = new Date().toISOString();
-    const sessionTime = sessionStartTime.current ? Date.now() - sessionStartTime.current : 0;
-    console.log(`[EMERGENCY] ${timestamp} (+${sessionTime}ms) ${event}:`, data || '');
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const uploadRef = useRef<StreamUpload | null>(null);
+  const writeChainRef = useRef<Promise<void>>(Promise.resolve());
+  const finalizingRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const localSegmentsRef = useRef<Blob[]>([]);
+
+  const stopTracks = () => {
+    const active = mediaStreamRef.current;
+    active?.getTracks().forEach(track => track.stop());
+    mediaStreamRef.current = null;
+    setMediaStream(null);
   };
 
-  // Send video chunk to server with session-based concatenation
-  const sendVideoChunk = async (videoBlob: Blob, chunkIndex: number) => {
-    if (!recordingSessionIdRef.current) {
-      logEvent('ERROR: No recording session ID available');
-      handleRecordingError('Recording session not initialized');
-      return;
-    }
+  const clearTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
+  };
 
-    const chunkStartTime = Date.now();
-    logEvent('CHUNK_UPLOAD_START', {
-      chunkIndex,
-      blobSize: videoBlob.size,
-      blobType: videoBlob.type,
-      userId: user?.id || 'guest'
-    });
-
+  const finishTransfer = async () => {
+    if (finalizingRef.current) return;
+    finalizingRef.current = true;
     try {
-      // Convert blob to base64 using ArrayBuffer approach for better reliability
-      const reader = new FileReader();
-      
-      reader.onloadend = async () => {
-        try {
-          const arrayBuffer = reader.result as ArrayBuffer;
-          logEvent('CHUNK_READ_COMPLETE', {
-            chunkIndex,
-            resultType: typeof arrayBuffer,
-            arrayBufferLength: arrayBuffer?.byteLength || 0,
-            originalBlobSize: videoBlob.size
-          });
-
-          if (!arrayBuffer || !(arrayBuffer instanceof ArrayBuffer)) {
-            throw new Error('FileReader result is not an ArrayBuffer');
-          }
-
-          if (arrayBuffer.byteLength === 0) {
-            throw new Error('ArrayBuffer is empty');
-          }
-
-          // Convert ArrayBuffer to base64
-          const uint8Array = new Uint8Array(arrayBuffer);
-          let binaryString = '';
-          for (let i = 0; i < uint8Array.length; i++) {
-            binaryString += String.fromCharCode(uint8Array[i]);
-          }
-          const base64Video = btoa(binaryString);
-
-          if (!base64Video || base64Video.length === 0) {
-            throw new Error('Base64 conversion resulted in empty string');
-          }
-          
-          logEvent('BASE64_CONVERSION_SUCCESS', {
-              chunkIndex,
-            base64Length: base64Video.length,
-            originalSize: videoBlob.size,
-            compressionRatio: (base64Video.length / videoBlob.size).toFixed(2)
-            });
-          
-          // Prepare payload with session-based concatenation
-          const payload = {
-            videoChunk: base64Video, // Use the properly converted base64
-            chunkIndex,
-            chunkSize: videoBlob.size,
-            userId: user?.id || null,
-            recordingSessionId: recordingSessionIdRef.current, // Session ID to group chunks
-            isFirstChunk: isFirstChunkRef.current, // Flag to indicate if this is the first chunk
-            timestamp: new Date().toISOString(),
-            location: currentLocation.current ? {
-              latitude: currentLocation.current.coords.latitude,
-              longitude: currentLocation.current.coords.longitude,
-              accuracy: currentLocation.current.coords.accuracy,
-              timestamp: currentLocation.current.timestamp
-            } : null,
-            emergencyType: 'panic_button'
-          };
-          
-
-          logEvent('CHUNK_UPLOAD_PAYLOAD_READY', {
-            chunkIndex,
-            payloadKeys: Object.keys(payload),
-            base64VideoLength: base64Video.length,
-            hasLocation: !!payload.location,
-            recordingSessionId: recordingSessionIdRef.current,
-            isFirstChunk: isFirstChunkRef.current
-          });
-
-          // Send to the Express emergency upload endpoint
-          const uploadStartTime = Date.now();
-          const { data, error } = await api.functions.invoke('video-stream', {
-            body: payload
-          });
-
-          const uploadDuration = Date.now() - uploadStartTime;
-
-          if (error) {
-            logEvent('CHUNK_UPLOAD_ERROR', {
-              chunkIndex,
-              error: error.message,
-              errorDetails: error,
-              uploadDuration
-            });
-            throw error;
-          } else {
-            logEvent('CHUNK_UPLOAD_SUCCESS', {
-              chunkIndex,
-              response: data,
-              uploadDuration,
-              totalDuration: Date.now() - chunkStartTime
-            });
-            
-            // Update UI state
-            setChunkCount(prev => prev + 1);
-            setTotalUploadSize(prev => prev + videoBlob.size);
-            setLastChunkTime(Date.now());
-            setUploadStatus(`Chunk ${chunkIndex}: ${(videoBlob.size / 1024).toFixed(1)}KB uploaded`);
-            
-            // Mark subsequent chunks as not first
-            if (isFirstChunkRef.current) {
-              setIsFirstChunk(false);
-              isFirstChunkRef.current = false;
-            }
-          }
-        } catch (processError) {
-          logEvent('CHUNK_PROCESSING_ERROR', {
-            chunkIndex,
-            error: processError.message,
-            stack: processError.stack
-          });
-          handleRecordingError(`Chunk ${chunkIndex} failed: ${processError.message}`, false);
-        }
-      };
-
-      reader.onerror = (readerError) => {
-        logEvent('FILEREADER_ERROR', {
-          chunkIndex,
-          error: readerError,
-          readerState: reader.readyState
-        });
-        handleRecordingError(`Failed to read chunk ${chunkIndex}`, false);
-      };
-
-      reader.onloadstart = () => {
-        logEvent('FILEREADER_START', { chunkIndex });
-      };
-
-      reader.readAsArrayBuffer(videoBlob);
-
-    } catch (error) {
-      logEvent('CHUNK_UPLOAD_EXCEPTION', {
-        chunkIndex,
-        error: error.message,
-        stack: error.stack
-      });
-      handleRecordingError(`Chunk upload failed: ${error.message}`, false);
+      await writeChainRef.current;
+      const upload = uploadRef.current;
+      if (upload) {
+        await upload.writer.close();
+        const result = await upload.completed;
+        setTransferStatus(`Private stream saved (${formatBytes(result.size)})`);
+      }
+      toast({ title: 'Recording stopped', description: 'Camera and microphone are off. The emergency remains queued until a responder acknowledges it.' });
+    } catch (reason) {
+      setError(message(reason));
+      toast({ title: 'Stream transfer ended with an error', description: message(reason), variant: 'destructive' });
+    } finally {
+      uploadRef.current = null;
+      recorderRef.current = null;
+      writeChainRef.current = Promise.resolve();
+      finalizingRef.current = false;
+      setStopping(false);
+      setDuration(0);
     }
   };
 
-  // Handle recording errors - don't stop recording for individual chunk failures
-  const handleRecordingError = (errorMessage: string, isCritical: boolean = false) => {
-    logEvent('RECORDING_ERROR_HANDLER', { errorMessage, isRecording, isCritical });
-    
-    if (isCritical) {
-    setError(errorMessage);
-    
-    if (isRecording) {
-        logEvent('STOPPING_RECORDING_DUE_TO_CRITICAL_ERROR');
-      stopRecording();
-    }
-
-    toast({
-      title: "Emergency Recording Error",
-      description: errorMessage,
-      variant: "destructive",
-      duration: 5000,
-    });
-    } else {
-      // For non-critical errors (like individual chunk failures), just log and continue
-      logEvent('NON_CRITICAL_ERROR_CONTINUING', { errorMessage });
-      
-      toast({
-        title: "Upload Warning",
-        description: `Some chunks failed to upload, but recording continues: ${errorMessage}`,
-        variant: "default",
-        duration: 3000,
-      });
-    }
-  };
-
-  // Enhanced location sharing with better error handling
-  const shareLocation = async () => {
-    logEvent('LOCATION_SHARING_START');
-    setLocationStatus('Getting location...');
-    
-    if (!navigator.geolocation) {
-      logEvent('GEOLOCATION_NOT_SUPPORTED');
-      setLocationStatus('Geolocation not supported');
-      setTimeout(() => setLocationSent(true), 1000);
-      return;
-    }
-
-    const options = {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 300000
-    };
-
-    logEvent('GEOLOCATION_REQUEST_START', options);
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        currentLocation.current = position;
-        logEvent('LOCATION_SUCCESS', {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          timestamp: position.timestamp
-        });
-        setLocationStatus('GPS location obtained');
-        setLocationSent(true);
-      },
-      (geoError) => {
-        logEvent('LOCATION_ERROR', {
-          code: geoError.code,
-          message: geoError.message
-        });
-        setLocationStatus(`Location error: ${geoError.message}`);
-        setTimeout(() => setLocationSent(true), 1000);
-      },
-      options
-    );
-  };
+  const getLocation = () => new Promise<{ latitude: number; longitude: number; accuracy?: number } | undefined>(resolve => {
+    if (!navigator.geolocation) { setLocationStatus('Location unavailable'); resolve(undefined); return; }
+    setLocationStatus('Getting GPS location…');
+    navigator.geolocation.getCurrentPosition(position => {
+      setLocationStatus(`GPS obtained (±${Math.round(position.coords.accuracy)} m)`);
+      resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy });
+    }, () => { setLocationStatus('Location permission unavailable'); resolve(undefined); }, { enableHighAccuracy: true, timeout: 3000, maximumAge: 60000 });
+  });
 
   const startRecording = async () => {
-    sessionStartTime.current = Date.now();
-    logEvent('RECORDING_START_REQUESTED', { userId: user?.id });
-    
-
+    if (recording || stopping || countdown !== null) return;
+    setError(null); setTransferStatus(''); setStreamedBytes(0); setDuration(0); localSegmentsRef.current = [];
     try {
-      // Generate unique session ID for this recording
-      const sessionId = `emergency_${user?.id || 'guest'}_${Date.now()}_${crypto.randomUUID()}`;
-      setRecordingSessionId(sessionId);
-      recordingSessionIdRef.current = sessionId;
-      setIsFirstChunk(true);
-      isFirstChunkRef.current = true;
-      
-      logEvent('RECORDING_SESSION_CREATED', { sessionId });
-      
-      // Reset state
-      setError(null);
-      setChunkCount(0);
-      setTotalUploadSize(0);
-      setLastChunkTime(null);
-
-      logEvent('COUNTDOWN_START');
-      setCountdown(3);
-      
-      // Enhanced countdown with vibration and audio cues
-      for (let i = 3; i > 0; i--) {
-        logEvent('COUNTDOWN_TICK', { remaining: i });
-        if (navigator.vibrate) {
-          navigator.vibrate(200);
-        }
+      for (let remaining = 3; remaining > 0; remaining -= 1) {
+        setCountdown(remaining);
+        navigator.vibrate?.(150);
         await new Promise(resolve => setTimeout(resolve, 1000));
-        setCountdown(i - 1);
       }
-      
-      logEvent('COUNTDOWN_COMPLETE');
-      
-      // Share location and place the emergency in the dispatch queue.
-      shareLocation();
-      setEmergencyContacted(true);
-      
-      logEvent('REQUESTING_MEDIA_DEVICES');
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 }
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
-      
-      logEvent('MEDIA_STREAM_OBTAINED', {
-        videoTracks: mediaStream.getVideoTracks().length,
-        audioTracks: mediaStream.getAudioTracks().length,
-        streamId: mediaStream.id
-      });
-      
-      setStream(mediaStream);
-      
-      // Check MediaRecorder support
-      const mimeType = 'video/webm;codecs=vp9';
-      const isSupported = MediaRecorder.isTypeSupported(mimeType);
-      
-      logEvent('MEDIARECORDER_SETUP', {
-        mimeTypeSupported: isSupported,
-        mimeType: mimeType
-      });
+      setCountdown(0);
+      const [stream, location] = await Promise.all([
+        navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: { echoCancellation: true, noiseSuppression: true } }),
+        getLocation(),
+      ]);
+      mediaStreamRef.current = stream;
+      setMediaStream(stream);
 
-      const recorder = new MediaRecorder(mediaStream, {
-        mimeType: isSupported ? mimeType : 'video/webm',
-        videoBitsPerSecond: 1000000 // 1 Mbps
+      const nextSessionId = `emergency_${Date.now()}_${crypto.randomUUID()}`;
+      const upload = await createEmergencyRecordingStream({ recordingSessionId: nextSessionId, type: 'panic_button', location });
+      uploadRef.current = upload;
+      setSessionId(nextSessionId);
+      setTransferStatus('Encrypted transport open — streaming to private storage');
+      writeChainRef.current = Promise.resolve();
+
+      const preferredType = 'video/webm;codecs=vp9,opus';
+      const recorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported(preferredType) ? preferredType : 'video/webm',
+        videoBitsPerSecond: 1_000_000,
       });
-      
-      setMediaRecorder(recorder);
-      chunks.current = [];
-      let chunkIndex = 0;
-      
-      // Handle data available - send chunks to server in real-time
-      recorder.ondataavailable = (e) => {
-        const chunkTime = Date.now();
-        const currentChunkIndex = chunkIndex++;
-        
-        if (e.data.size > 0) {
-            chunks.current.push(e.data);
-            setSavedChunks(prev => [...prev, e.data]); // ✅ keep locally
-          
-        const timeSinceStart = sessionStartTime.current ? chunkTime - sessionStartTime.current : 0;
-        
-        logEvent('CHUNK_AVAILABLE', {
-            chunkIndex: currentChunkIndex,
-          dataSize: e.data.size,
-          timeSinceStart,
-          timeSinceLastChunk: lastChunkTime ? chunkTime - lastChunkTime : 0
-        });
-
-          // Send chunk to server with error handling
-          sendVideoChunk(e.data, currentChunkIndex).catch((error) => {
-            logEvent('CHUNK_SEND_FAILED', {
-              chunkIndex: currentChunkIndex,
-              error: error.message
-            });
-            // Don't stop recording for individual chunk failures
-          });
-        } else {
-          logEvent('EMPTY_CHUNK_RECEIVED', { chunkIndex: currentChunkIndex });
-        }
-      };
-      // Set up event handlers before starting
-      recorder.onstart = () => {
-        logEvent('MEDIARECORDER_STARTED');
-      };
-
-      recorder.onstop = () => {
-        logEvent('MEDIARECORDER_STOPPED', {
-          totalChunks: chunks.current.length,
-          totalSize: chunks.current.reduce((sum, chunk) => sum + chunk.size, 0)
+      recorderRef.current = recorder;
+      recorder.ondataavailable = event => {
+        if (!event.data.size || !uploadRef.current) return;
+        localSegmentsRef.current.push(event.data);
+        setStreamedBytes(total => total + event.data.size);
+        writeChainRef.current = writeChainRef.current.then(async () => {
+          const bytes = new Uint8Array(await event.data.arrayBuffer());
+          await uploadRef.current?.writer.write(bytes);
         });
       };
-
-      recorder.onerror = (event) => {
-        logEvent('MEDIARECORDER_ERROR', { error: event });
-        handleRecordingError('MediaRecorder error occurred', true);
-      };
-      
-      // Start recording and send chunks every 5 seconds
-      logEvent('STARTING_MEDIARECORDER', { timeslice: 5000 });
-      recorder.start(5000);
-      setIsRecording(true);
+      recorder.onerror = () => { setError('Media recorder failed'); stopRecording(); };
+      recorder.onstop = () => { void finishTransfer(); };
+      recorder.start(1000);
+      setRecording(true);
       setCountdown(null);
-      
-      // Show success message
-      toast({
-        title: "Emergency Recording Started",
-        description: "Video is being streamed to emergency services",
-        duration: 3000,
-      });
-      
-      logEvent('RECORDING_STARTED_SUCCESSFULLY');
-      
-      // Start duration timer
-      durationInterval.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
-      }, 1000);
-      
-    } catch (err) {
-      logEvent('RECORDING_START_ERROR', {
-        error: err.message,
-        stack: err.stack,
-        name: err.name
-      });
-      
-      const errorMessage = err.name === 'NotAllowedError' 
-        ? 'Camera/microphone permission denied. Please allow access and try again.'
-        : err.name === 'NotFoundError'
-        ? 'No camera/microphone found. Please connect a device and try again.'
-        : `Could not access camera/microphone: ${err.message}`;
-      
-      handleRecordingError(errorMessage, true);
-      setCountdown(null);
-    }
-  };
-  
-  const finalizeRecordingSession = async () => {
-    if (!recordingSessionIdRef.current) return;
-
-    try {
-      logEvent('SESSION_FINALIZATION_START', { sessionId: recordingSessionIdRef.current });
-      
-      // Mark session as completed in the database
-      const { error } = await (api as any)
-        .from('emergency_logs')
-        .update({ 
-          status: 'completed',
-          updated_at: new Date().toISOString()
-        })
-        .eq('recording_session_id', recordingSessionIdRef.current);
-
-      if (error) {
-        logEvent('SESSION_FINALIZATION_ERROR', { error: error.message });
-      } else {
-        logEvent('SESSION_FINALIZATION_SUCCESS', { sessionId: recordingSessionIdRef.current });
-        toast({
-          title: "Recording Session Completed",
-          description: "Emergency video session has been finalized and sent to authorities",
-          duration: 3000,
-        });
-      }
-    } catch (error) {
-      logEvent('SESSION_FINALIZATION_EXCEPTION', { error: error.message });
+      timerRef.current = setInterval(() => setDuration(value => value + 1), 1000);
+      toast({ title: 'Emergency recording started', description: 'A single live stream is being transferred to private CrimeX storage. Call an official number if danger is immediate.' });
+    } catch (reason) {
+      stopTracks();
+      setCountdown(null); setRecording(false); setStopping(false); setError(message(reason));
+      try { await uploadRef.current?.writer.abort(reason); } catch { /* transport already closed */ }
+      uploadRef.current = null;
+      toast({ title: 'Could not start recording', description: message(reason), variant: 'destructive' });
     }
   };
 
   const stopRecording = () => {
-    setIsStopping(true);
-    logEvent('STOP_RECORDING_REQUESTED', {
-      mediaRecorderState: mediaRecorder?.state,
-      hasStream: !!stream,
-    });
-
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      // The onstop event will handle all cleanup.
-      mediaRecorder.onstop = () => {
-        logEvent('MEDIARECORDER_ONSTOP_EVENT', {
-          totalChunks: chunks.current.length,
-          totalSize: chunks.current.reduce((sum, chunk) => sum + chunk.size, 0),
-        });
-
-        // Stop all media tracks to release camera/mic
-        if (stream) {
-          stream.getTracks().forEach(track => track.stop());
-          setStream(null);
-          logEvent('MEDIA_STREAM_CLEARED');
-        }
-
-        // Clear intervals
-        if (durationInterval.current) clearInterval(durationInterval.current);
-        durationInterval.current = null;
-        if (uploadInterval.current) clearInterval(uploadInterval.current);
-        uploadInterval.current = null;
-
-        // Finalize session on the backend
-        finalizeRecordingSession();
-
-        // Reset all component state
-        setIsRecording(false);
-        setIsStopping(false);
-        setMediaRecorder(null);
-        setRecordingDuration(0);
-        setLocationSent(false);
-        setLocationStatus('');
-        setEmergencyContacted(false);
-        setUploadStatus('');
-        
-        toast({
-          title: "Emergency Recording Stopped",
-          description: `Recording completed. ${chunkCount} chunks uploaded.`,
-          duration: 5000,
-        });
-
-        logEvent('RECORDING_SESSION_ENDED', {
-          sessionId: recordingSessionIdRef.current,
-          totalChunks: chunkCount,
-          totalSize: totalUploadSize,
-          duration: recordingDuration,
-        });
-        
-        // Reset session-specific state
-        setChunkCount(0);
-        setTotalUploadSize(0);
-        setLastChunkTime(null);
-        setRecordingSessionId(null);
-        recordingSessionIdRef.current = null;
-        setIsFirstChunk(true);
-        isFirstChunkRef.current = true;
-        currentLocation.current = null;
-        sessionStartTime.current = null;
-      };
-
-      logEvent('MEDIARECORDER_STOP_CALLED');
-      mediaRecorder.stop();
+    if (stopping) return;
+    setStopping(true);
+    setRecording(false);
+    clearTimer();
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      try { recorder.requestData(); } catch { /* some browsers do not allow requestData during shutdown */ }
+      recorder.stop();
     } else {
-      // Fallback cleanup if recorder is not in a recording state
-      logEvent('STOP_RECORDING_FALLBACK', { state: mediaRecorder?.state });
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        setStream(null);
-      }
-      if (durationInterval.current) clearInterval(durationInterval.current);
-      if (uploadInterval.current) clearInterval(uploadInterval.current);
-      setIsRecording(false);
-      setIsStopping(false);
+      void finishTransfer();
     }
+    // Release camera and microphone immediately; transfer finalization continues separately.
+    stopTracks();
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const downloadLocalCopy = () => {
+    if (!localSegmentsRef.current.length) return;
+    const url = URL.createObjectURL(new Blob(localSegmentsRef.current, { type: 'video/webm' }));
+    const anchor = document.createElement('a');
+    anchor.href = url; anchor.download = `emergency-recording-${Date.now()}.webm`; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
-  
-  useEffect(() => {
-    return () => {
-      logEvent('COMPONENT_CLEANUP');
-      
-      // Stop media recorder if active
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        try {
-          mediaRecorder.stop();
-          logEvent('CLEANUP_MEDIARECORDER_STOPPED');
-        } catch (error) {
-          logEvent('CLEANUP_ERROR_STOPPING_MEDIARECORDER', { error: error.message });
-        }
-      }
-      
-      // Stop all media tracks to release camera/microphone
-      if (stream) {
-        stream.getTracks().forEach(track => {
-          try {
-            track.stop();
-            logEvent('CLEANUP_TRACK_STOPPED', { kind: track.kind });
-          } catch (error) {
-            logEvent('CLEANUP_ERROR_STOPPING_TRACK', { 
-              kind: track.kind, 
-              error: error.message 
-            });
-          }
-        });
-        logEvent('CLEANUP_STREAM_RELEASED');
-      }
-      
-      // Clear all intervals
-      if (durationInterval.current) {
-        clearInterval(durationInterval.current);
-        logEvent('CLEANUP_DURATION_INTERVAL_CLEARED');
-      }
-      
-      if (uploadInterval.current) {
-        clearInterval(uploadInterval.current);
-        logEvent('CLEANUP_UPLOAD_INTERVAL_CLEARED');
-      }
-    };
-  }, [mediaRecorder, stream]);
+  useEffect(() => () => {
+    clearTimer();
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== 'inactive') { try { recorder.stop(); } catch { /* already stopping */ } }
+    stopTracks();
+    void uploadRef.current?.writer.abort('Component closed');
+  }, []);
 
-  return (
-    <div className="fixed bottom-6 right-6 z-50">
-      {/* Error Toast */}
-      {error && (
-        <div className="absolute bottom-20 right-0 w-80 bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg shadow-xl animate-slide-up">
-          <div className="flex items-start">
-            <AlertCircle className="h-5 w-5 mr-3 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="font-medium text-sm">Emergency Alert Failed</p>
-              <p className="text-xs mt-1">{error}</p>
-            </div>
-            <button 
-              onClick={() => setError(null)}
-              className="ml-2 text-red-500 hover:text-red-700 font-bold text-lg leading-none"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+  return <div className="fixed bottom-6 right-6 z-50" data-testid="emergency-recorder">
+    {error && <div className="absolute bottom-24 right-0 flex w-80 gap-3 rounded-lg border-l-4 border-red-500 bg-red-50 p-4 text-red-700 shadow-xl"><AlertCircle className="h-5 w-5 shrink-0" /><div><p className="font-medium">Recording problem</p><p className="text-xs">{error}</p></div></div>}
 
-      {/* Status Cards */}
-      {isRecording && (
-        <div className="absolute bottom-20 right-0 space-y-3 animate-slide-up">
-          {/* Recording Status */}
-          <div className="bg-white rounded-xl shadow-xl p-4 border-l-4 border-red-500 min-w-64">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2"></div>
-                <span className="text-sm font-bold text-red-600 uppercase tracking-wide">EMERGENCY ACTIVE</span>
-              </div>
-              <span className="text-lg font-mono font-bold text-slate-700">
-                {formatDuration(recordingDuration)}
-              </span>
-            </div>
-            
-            {/* Live Preview */}
-            <div className="relative mb-3">
-              <div className="w-full h-24 bg-slate-900 rounded-lg overflow-hidden relative">
-                {stream && (
-                  <video
-                    autoPlay
-                    muted
-                    playsInline
-                    ref={(video) => {
-                      if (video && stream) {
-                        video.srcObject = stream;
-                      }
-                    }}
-                    className="w-full h-full object-cover"
-                  />
-                )}
-                <div className="absolute top-2 left-2 flex items-center space-x-2">
-                  <div className="flex items-center bg-red-500 text-white px-2 py-1 rounded-md text-xs">
-                    <Video className="h-3 w-3 mr-1" />
-                    LIVE
-                  </div>
-                </div>
-                <div className="absolute top-2 right-2 flex items-center space-x-1">
-                  <div className="w-1 h-4 bg-green-400 animate-pulse rounded-full"></div>
-                  <Mic className="h-3 w-3 text-white" />
-                </div>
-              </div>
-            </div>
+    {(recording || stopping) && <div className="absolute bottom-24 right-0 w-80 rounded-xl border-l-4 border-red-500 bg-white p-4 shadow-xl">
+      <div className="mb-3 flex items-center justify-between"><span className="flex items-center text-sm font-bold text-red-600"><span className="mr-2 h-3 w-3 animate-pulse rounded-full bg-red-500" />EMERGENCY ACTIVE</span><span className="font-mono font-bold">{formatDuration(duration)}</span></div>
+      <div className="relative mb-3 h-32 overflow-hidden rounded-lg bg-slate-900">{mediaStream && <video autoPlay muted playsInline ref={node => { if (node) node.srcObject = mediaStream; }} className="h-full w-full object-cover" />}<span className="absolute left-2 top-2 flex items-center rounded bg-red-600 px-2 py-1 text-xs text-white"><Video className="mr-1 h-3 w-3" />LIVE</span><Mic className="absolute right-2 top-2 h-4 w-4 text-white" /></div>
+      <div className="space-y-2 text-xs"><p className="flex items-center text-orange-700"><MapPin className="mr-2 h-4 w-4" />{locationStatus}</p><p className="flex items-center text-blue-700"><Shield className="mr-2 h-4 w-4" />{stopping ? 'Closing stream and saving final bytes…' : transferStatus}</p><p>{formatBytes(streamedBytes)} transferred through one live request</p>{sessionId && <p className="truncate text-slate-500">Session: {sessionId.split('_').pop()}</p>}</div>
+    </div>}
 
-            {/* Status Indicators */}
-            <div className="space-y-2">
-              <div className="flex items-center text-orange-600 text-xs">
-                <MapPin className="h-4 w-4 mr-2" />
-                <span>{locationStatus}</span>
-                {!locationSent ? (
-                  <div className="ml-auto w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                ) : (
-                  <div className="ml-auto w-2 h-2 bg-green-500 rounded-full"></div>
-                )}
-              </div>
-              {emergencyContacted && (
-                <div className="flex items-center text-blue-600 text-xs">
-                  <Users className="h-4 w-4 mr-2" />
-                  <span>Dispatch queue notified — call an official number until acknowledged</span>
-                  <div className="ml-auto w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                </div>
-              )}
-              {isStopping && (
-                <div className="flex items-center text-yellow-600 text-xs">
-                  <div className="h-4 w-4 mr-2 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin"></div>
-                  <span>Stopping recording and releasing camera...</span>
-                  <div className="ml-auto w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                </div>
-              )}
-              {uploadStatus && (
-                <div className="flex items-center text-green-600 text-xs">
-                  <Shield className="h-4 w-4 mr-2" />
-                  <span>{uploadStatus}</span>
-                  <div className="ml-auto w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                </div>
-              )}
-              {/* Upload Statistics */}
-              {chunkCount > 0 && (
-                <div className="flex items-center text-purple-600 text-xs">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
-                  <span>Chunks: {chunkCount} | Size: {formatBytes(totalUploadSize)}</span>
-                </div>
-              )}
-              
-              {/* Session ID Display */}
-              {recordingSessionId && (
-                <div className="flex items-center text-slate-500 text-xs">
-                  <div className="w-2 h-2 bg-slate-400 rounded-full mr-2"></div>
-                  <span className="truncate">Session: {recordingSessionId.split('_').pop()}</span>
-                </div>
-              )}
-              
-              {/* Manual Download Button for Testing */}
-              {savedChunks.length > 0 && (
-                <div className="mt-3 pt-2 border-t border-slate-200">
-                  <button
-                    onClick={downloadRecording}
-                    className="w-full bg-blue-500 hover:bg-blue-600 text-white text-xs py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
-                  >
-                    <Video className="h-3 w-3 mr-1" />
-                    Download Recording ({savedChunks.length} chunks)
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+    {!recording && !stopping && transferStatus && <div className="absolute bottom-24 right-0 w-80 rounded-lg bg-white p-3 text-xs shadow-xl"><p className="text-green-700">{transferStatus}</p>{localSegmentsRef.current.length > 0 && <button className="mt-2 flex items-center text-blue-700" onClick={downloadLocalCopy}><Camera className="mr-1 h-3 w-3" />Download local copy</button>}</div>}
 
-      {/* Main Emergency Button */}
-      <div className="relative">
-        {/* Ripple Effect */}
-        {(isRecording || countdown !== null) && (
-          <>
-            <div className="absolute inset-0 animate-ping rounded-full bg-red-400 opacity-75"></div>
-            <div className="absolute inset-0 animate-pulse rounded-full bg-red-500 opacity-50" style={{ animationDelay: '0.5s' }}></div>
-          </>
-        )}
-
-        {isRecording ? (
-          /* Stop Recording Button */
-          <div className="relative">
-            <Button
-              onClick={() => {
-                console.log("STOP BUTTON CLICKED! Triggering stopRecording function...");
-                logEvent('STOP_BUTTON_CLICKED');
-                stopRecording();
-              }}
-              disabled={isStopping}
-              className={`h-20 w-20 rounded-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white shadow-2xl transform hover:scale-110 transition-all duration-200 flex flex-col items-center justify-center border-4 border-white ${
-                isStopping ? 'opacity-75 cursor-not-allowed' : ''
-              }`}
-            >
-              {isStopping ? (
-                <>
-                  <div className="h-8 w-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-xs font-bold mt-1">STOPPING</span>
-                </>
-              ) : (
-                <>
-                  <Square className="h-8 w-8 fill-current" />
-                  <span className="text-xs font-bold mt-1">STOP</span>
-                </>
-              )}
-            </Button>
-            
-            {/* Pulsing Border */}
-            <div className="absolute inset-0 rounded-full border-4 border-red-300 animate-pulse"></div>
-          </div>
-        ) : (
-          /* Emergency Activation Button */
-          <div className="relative">
-            <Button
-              onClick={() => {
-                logEvent('EMERGENCY_BUTTON_CLICKED', { 
-                  isRecording, 
-                  countdown, 
-                  hasUser: !!user 
-                });
-                if (!isRecording && countdown === null) {
-                  startRecording();
-                }
-              }}
-              onMouseEnter={() => setIsExpanded(true)}
-              onMouseLeave={() => setIsExpanded(false)}
-              className={`h-18 w-18 rounded-full bg-gradient-to-r from-red-600 via-red-500 to-red-600 hover:from-red-700 hover:via-red-600 hover:to-red-700 text-white shadow-2xl transform hover:scale-110 transition-all duration-300 flex flex-col items-center justify-center border-4 border-white relative overflow-hidden ${
-                countdown !== null ? 'animate-bounce scale-125' : ''
-              }`}
-              disabled={countdown !== null}
-            >
-              {/* Animated Background */}
-              <div className="absolute inset-0 bg-gradient-to-r from-red-400 to-red-600 opacity-50 animate-pulse"></div>
-              
-              {countdown !== null ? (
-                <div className="relative z-10 flex flex-col items-center">
-                  <span className="text-2xl font-bold animate-pulse">{countdown}</span>
-                  <span className="text-xs font-medium">ACTIVATING</span>
-                </div>
-              ) : (
-                <div className="relative z-10 flex flex-col items-center">
-                  <AlertTriangle className="h-8 w-8 mb-1 drop-shadow-lg" />
-                  <span className="text-xs font-bold tracking-wider">EMERGENCY</span>
-                </div>
-              )}
-              
-              {/* Lightning Effect */}
-              <Zap className="absolute top-1 right-1 h-4 w-4 text-yellow-300 animate-pulse opacity-75" />
-            </Button>
-
-            {/* Hover Info Card */}
-            {isExpanded && !isRecording && countdown === null && (
-              <div className="absolute bottom-full right-0 mb-4 w-72 bg-white rounded-xl shadow-2xl p-4 border-2 border-red-100 animate-fade-in">
-                <div className="flex items-center mb-3">
-                  <Shield className="h-5 w-5 text-red-500 mr-2" />
-                  <span className="font-bold text-slate-800">Emergency Protocol</span>
-                </div>
-                <div className="space-y-2 text-sm text-slate-600">
-                  <div className="flex items-center">
-                    <div className="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                    <span>Secure evidence upload to the dispatch queue</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                    <span>GPS shared with authorized dispatchers</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                    <span>Call an official number until a responder acknowledges</span>
-                  </div>
-                </div>
-                <div className="mt-3 pt-3 border-t border-slate-200">
-                  <p className="text-xs text-slate-500">
-                    <Phone className="h-3 w-3 inline mr-1" />
-                    Cameroon: Police 117 · Gendarmerie 113 · Fire 118 · SAMU 119
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* CSS Animations */}
-      <style>{`
-        @keyframes slide-up {
-          from {
-            transform: translateY(20px);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        
-        .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
-        }
-        
-        .animate-fade-in {
-          animation: fade-in 0.2s ease-out;
-        }
-      `}</style>
+    <div className="relative" onMouseEnter={() => setExpanded(true)} onMouseLeave={() => setExpanded(false)}>
+      {(recording || countdown !== null) && <div className="absolute inset-0 animate-ping rounded-full bg-red-400 opacity-60" />}
+      <Button onClick={recording ? stopRecording : () => void startRecording()} disabled={stopping || countdown !== null} className="relative h-20 w-20 rounded-full border-4 border-white bg-red-600 p-0 text-white shadow-2xl hover:bg-red-700">
+        {stopping ? <span className="text-xs font-bold">STOPPING</span> : recording ? <span className="flex flex-col items-center"><Square className="h-8 w-8 fill-current" /><span className="text-xs font-bold">STOP</span></span> : countdown !== null ? <span className="text-2xl font-bold">{countdown}</span> : <span className="flex flex-col items-center"><AlertTriangle className="h-8 w-8" /><span className="text-xs font-bold">EMERGENCY</span></span>}
+      </Button>
+      {expanded && !recording && !stopping && countdown === null && <div className="absolute bottom-full right-0 mb-4 w-72 rounded-xl border bg-white p-4 shadow-2xl"><p className="mb-2 flex items-center font-bold"><Shield className="mr-2 h-5 w-5 text-red-500" />Emergency recording</p><p className="text-sm text-slate-600">Starts one continuous private upload after camera, microphone, and location permissions. Stopping turns the camera and microphone off immediately.</p><p className="mt-3 border-t pt-3 text-xs text-slate-500"><Phone className="mr-1 inline h-3 w-3" />Police 117 · Gendarmerie 113 · Fire 118 · SAMU 119</p></div>}
     </div>
-  );
+  </div>;
 };
+
+function formatDuration(seconds: number) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function formatBytes(bytes: number) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`;
+}
 
 export default EmergencyButton;

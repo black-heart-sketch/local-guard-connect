@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -15,11 +15,18 @@ import { LanguageProvider } from "./contexts/LanguageContext";
 import PartnersPage from "./pages/PartnersPage";
 import SupportPage from "./pages/SupportPage";
 import TrackReportPage from "./pages/TrackReportPage";
+import { AuthProvider } from "./hooks/useAuth";
 
 const queryClient = new QueryClient();
 
+const ContextualEmergencyButton = () => {
+  const { pathname } = useLocation();
+  return pathname === "/" || pathname === "/dashboard" ? <EmergencyButton /> : null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <AuthProvider>
     <LanguageProvider>
     <TooltipProvider>
       <Toaster />
@@ -38,10 +45,11 @@ const App = () => (
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
-        <EmergencyButton />
+        <ContextualEmergencyButton />
       </BrowserRouter>
     </TooltipProvider>
     </LanguageProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

@@ -43,6 +43,7 @@ export function AuthForm({ mode, onSubmit, loading }: AuthFormProps) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="username"
             className="pl-10"
           />
         </div>
@@ -60,6 +61,7 @@ export function AuthForm({ mode, onSubmit, loading }: AuthFormProps) {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
+            autoComplete={isSignUp ? 'new-password' : 'current-password'}
             className="pl-10 pr-10"
           />
           <button
@@ -85,6 +87,7 @@ export function AuthForm({ mode, onSubmit, loading }: AuthFormProps) {
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               minLength={8}
+              autoComplete="new-password"
               className="pl-10 pr-10"
             />
             <button
