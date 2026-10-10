@@ -8,7 +8,9 @@ import { WebSocket } from "ws";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { createApp } from "../app.js";
 import { User } from "../models/User.js";
+import { Report } from "../models/Report.js";
 import { attachEmergencyStreamSocket } from "../routes/emergencyRoutes.js";
+import { config } from "../config.js";
 
 let mongo;
 let app;
@@ -42,6 +44,39 @@ test("health exposes the MongoDB backend", async () => {
   assert.equal(response.body.database, "mongodb");
 });
 
+test("AI chat validates input and proxies a safe bilingual request to OpenRouter", async () => {
+  await request(app).post("/api/ai/chat").send({ messages: [] }).expect(400);
+
+  const originalKey = config.openRouterApiKey;
+  const originalFetch = globalThis.fetch;
+  let upstreamRequest;
+  config.openRouterApiKey = "test-openrouter-key";
+  globalThis.fetch = async (_url, options) => {
+    upstreamRequest = options;
+    return new Response(JSON.stringify({
+      model: "test/safety-model",
+      choices: [{ message: { role: "assistant", content: "Appelez le 117 en cas de danger immédiat." } }],
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+
+  try {
+    const response = await request(app).post("/api/ai/chat").send({
+      locale: "fr",
+      sessionId: `test-${randomUUID()}`,
+      messages: [{ role: "user", content: "Quel numéro dois-je appeler ?" }],
+    }).expect(200);
+    assert.equal(response.body.model, "test/safety-model");
+    assert.match(response.body.reply, /117/);
+    const payload = JSON.parse(upstreamRequest.body);
+    assert.equal(payload.messages.at(-1).content, "Quel numéro dois-je appeler ?");
+    assert.match(payload.messages[0].content, /Police 117/);
+    assert.equal(upstreamRequest.headers.Authorization, "Bearer test-openrouter-key");
+  } finally {
+    config.openRouterApiKey = originalKey;
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("citizen registration, session and profile update", async () => {
   const registered = await request(app).post("/api/auth/register").send({ email: "citizen@example.cm", password: "StrongPass123!", fullName: "Test Citizen", locale: "en" }).expect(201);
   citizenToken = registered.body.token;
@@ -69,6 +104,44 @@ test("administrator can update user identity, role and jurisdiction fields", asy
   assert.equal(updated.body.full_name, "Updated Citizen");
   assert.equal(updated.body.phone, "+237699123457");
   assert.equal(updated.body.location.town, "Yaounde");
+});
+
+test("AI application context is filtered by the authenticated user's server-side role", async () => {
+  const citizen = await User.findById(citizenId);
+  const administrator = await User.findOne({ email: "admin@example.cm" });
+  const other = await User.create({ email: "other-context@example.cm", passwordHash: "not-used-in-this-test", fullName: "Other Citizen", role: "citizen" });
+  const ownReport = await Report.create({ reference: `CTX-OWN-${Date.now()}`, category: "Road safety", description: "Citizen-owned private report", addressText: "Mvan", reporter: citizen._id });
+  const otherReport = await Report.create({ reference: `CTX-OTHER-${Date.now()}`, category: "Theft", description: "Another user's private report", addressText: "Bonamoussadi", reporter: other._id });
+
+  const originalKey = config.openRouterApiKey;
+  const originalFetch = globalThis.fetch;
+  const upstreamPayloads = [];
+  config.openRouterApiKey = "test-role-aware-key";
+  globalThis.fetch = async (_url, options) => {
+    upstreamPayloads.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ model: "test/role-model", choices: [{ message: { role: "assistant", content: "Authorized summary" } }] }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+
+  try {
+    const input = { locale: "en", sessionId: `role-${randomUUID()}`, messages: [{ role: "user", content: "Show the reports I may access" }] };
+    const citizenResponse = await request(app).post("/api/ai/chat").set("Authorization", `Bearer ${citizenToken}`).send(input).expect(200);
+    assert.equal(citizenResponse.body.access.role, "citizen");
+    const citizenSystem = upstreamPayloads[0].messages[0].content;
+    assert.match(citizenSystem, new RegExp(ownReport.reference));
+    assert.doesNotMatch(citizenSystem, new RegExp(otherReport.reference));
+    assert.doesNotMatch(citizenSystem, /activeUsersByRole/);
+
+    const adminResponse = await request(app).post("/api/ai/chat").set("Authorization", `Bearer ${adminToken}`).send({ ...input, sessionId: `admin-${randomUUID()}` }).expect(200);
+    assert.equal(adminResponse.body.access.role, "admin");
+    const adminSystem = upstreamPayloads[1].messages[0].content;
+    assert.match(adminSystem, new RegExp(ownReport.reference));
+    assert.match(adminSystem, new RegExp(otherReport.reference));
+    assert.match(adminSystem, /activeUsersByRole/);
+    assert.equal(administrator.role, "admin");
+  } finally {
+    config.openRouterApiKey = originalKey;
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("anonymous report returns a recovery code and hides it from public listings", async () => {

@@ -4,9 +4,13 @@ export const config = {
   port: Number(process.env.PORT || 4000),
   mongoUri: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/crimex",
   jwtSecret: process.env.JWT_SECRET || "change-me-in-production",
-  clientOrigin: process.env.CLIENT_ORIGIN || "http://localhost:3000",
+  clientOrigin: process.env.CLIENT_ORIGIN || "http://localhost:3001",
+  mobileClientOrigins: process.env.MOBILE_CLIENT_ORIGINS || "capacitor://localhost,https://localhost",
   uploadDir: process.env.UPLOAD_DIR || "uploads",
   nodeEnv: process.env.NODE_ENV || "development",
+  openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
+  openRouterModel: process.env.OPENROUTER_MODEL || "nvidia/nemotron-3-ultra-550b-a55b:free",
+  openRouterSiteUrl: process.env.OPENROUTER_SITE_URL || process.env.CLIENT_ORIGIN || "http://localhost:3001",
 };
 
 export const emergencyDirectory = [

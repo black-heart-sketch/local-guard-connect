@@ -77,28 +77,28 @@ export const Header = () => {
       }`}
     >
       {/* Emergency Banner */}
-      <div className="bg-destructive py-1.5 text-white">
+      <div className="bg-destructive pb-1.5 pt-1.5 text-white" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.375rem)' }}>
         <div className="container mx-auto flex items-center justify-center gap-2 px-4 text-center">
           <Phone className="h-3.5 w-3.5" aria-hidden="true" />
           <span className="text-xs font-semibold">{t('emergencyBanner')}</span>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between">
+      <div className="container mx-auto px-3 py-3 sm:px-4 sm:py-4">
+        <div className="flex items-center justify-between gap-2">
           {/* Logo Section */}
-          <Link to="/">
-            <div className="flex items-center space-x-3">
-              <div className="relative">
+          <Link to="/" className="min-w-0 shrink-0" aria-label="CrimeX home">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="relative shrink-0">
                 <div className="rounded-lg border border-primary/20 bg-white p-1.5">
                   <img src="/favicon.jpeg" alt="CrimeX" className="h-8 w-8 rounded" />
                 </div>
               </div>
-              <div>
-                <span className="text-xl font-bold text-foreground">
+              <div className="min-w-0">
+                <span className="text-lg font-bold text-foreground sm:text-xl">
                   CrimeX
                 </span>
-                <div className="text-xs text-slate-500 -mt-1">{t('safetyNetwork')}</div>
+                <div className="-mt-1 hidden text-xs text-slate-500 sm:block">{t('safetyNetwork')}</div>
               </div>
             </div>
           </Link>
@@ -145,9 +145,10 @@ export const Header = () => {
           </nav>
 
           {/* User Section */}
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => setLocale(locale === 'en' ? 'fr' : 'en')} aria-label="Change language">
-              {t('language')}
+          <div className="flex min-w-0 items-center gap-1 sm:gap-3">
+            <Button className="h-11 min-w-11 px-2 sm:h-9 sm:px-3" variant="ghost" size="sm" onClick={() => setLocale(locale === 'en' ? 'fr' : 'en')} aria-label="Change language">
+              <span className="sm:hidden">{locale === 'en' ? 'FR' : 'EN'}</span>
+              <span className="hidden sm:inline">{t('language')}</span>
             </Button>
             {user ? (
               <div className="flex items-center gap-3">
@@ -207,9 +208,9 @@ export const Header = () => {
                   </Button>
                 </Link>
                 <Link to="/auth">
-                  <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                    <Shield className="h-4 w-4 mr-2" />
-                    {t('getStarted')}
+                  <Button className="h-11 w-11 bg-primary p-0 text-primary-foreground hover:bg-primary/90 sm:w-auto sm:px-4">
+                    <Shield className="h-5 w-5 sm:mr-2 sm:h-4 sm:w-4" />
+                    <span className="sr-only sm:not-sr-only">{t('getStarted')}</span>
                   </Button>
                 </Link>
               </div>
@@ -219,8 +220,10 @@ export const Header = () => {
             <Button
               variant="ghost"
               size="sm"
-              className="lg:hidden p-2"
+              className="h-11 w-11 p-2 lg:hidden"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={isMobileMenuOpen}
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>

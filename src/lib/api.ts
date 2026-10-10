@@ -52,7 +52,16 @@ export async function apiBlob(path: string): Promise<Blob> {
   return response.blob();
 }
 
-export async function createEmergencyRecordingStream(input: { recordingSessionId: string; type: string; location?: { latitude: number; longitude: number; accuracy?: number } }) {
+export type AiChatMessage = { role: "user" | "assistant"; content: string };
+
+export async function chatWithAssistant(input: { messages: AiChatMessage[]; locale: "en" | "fr"; sessionId: string }) {
+  return apiFetch<{ reply: string; model: string; access: { authenticated: boolean; role: string; scope: string } }>("/ai/chat", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createEmergencyRecordingStream(input: { recordingSessionId: string; type: string; mimeType?: string; location?: { latitude: number; longitude: number; accuracy?: number } }) {
   const created = await apiFetch<{ emergency: { id: string; reference: string }; recoveryCode?: string }>('/emergencies', { method: 'POST', body: JSON.stringify({ recordingSessionId: input.recordingSessionId, type: input.type, ...(input.location || {}) }) });
   const apiBase = API_URL.startsWith('http') ? new URL(API_URL) : new URL(API_URL, window.location.origin);
   apiBase.protocol = apiBase.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -66,7 +75,7 @@ export async function createEmergencyRecordingStream(input: { recordingSessionId
   let resolveCompleted: (value: { received: boolean; size: number; sessionId: string }) => void;
   let rejectCompleted: (reason: Error) => void;
   const completed = new Promise<{ received: boolean; size: number; sessionId: string }>((resolve, reject) => { resolveCompleted = resolve; rejectCompleted = reject; });
-  socket.addEventListener('open', () => socket.send(JSON.stringify({ type: 'authenticate', token: token(), recoveryCode: created.recoveryCode, mimeType: 'video/webm' })));
+  socket.addEventListener('open', () => socket.send(JSON.stringify({ type: 'authenticate', token: token(), recoveryCode: created.recoveryCode, mimeType: input.mimeType || 'video/webm' })));
   socket.addEventListener('message', event => {
     if (typeof event.data !== 'string') return;
     const response = JSON.parse(event.data);

@@ -25,7 +25,7 @@ export default function Auth() {
   const quickLoginEnabled = import.meta.env.VITE_ENABLE_QUICK_LOGIN !== 'false';
 
   useEffect(() => {
-    if (!authLoading && user) navigate('/');
+    if (!authLoading && user) navigate('/dashboard');
   }, [authLoading, navigate, user]);
 
   const handleEmailAuth = async (email: string, password: string, isSignUp: boolean) => {
@@ -53,7 +53,7 @@ export default function Auth() {
         if (error) throw error;
         toast({ title: 'Welcome!', description: 'You have successfully signed in.' });
       }
-      navigate('/');
+      navigate('/dashboard');
     } catch (error: any) {
       toast({
         variant: 'destructive',

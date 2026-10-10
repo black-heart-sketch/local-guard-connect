@@ -24,21 +24,25 @@ import channelEventRoutes from "./routes/channelEventRoutes.js";
 import dataSubjectRequestRoutes from "./routes/dataSubjectRequestRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import pushSubscriptionRoutes from "./routes/pushSubscriptionRoutes.js";
+import aiChatRoutes from "./routes/aiChatRoutes.js";
 
 export function createApp() {
   ensureUploadDirs();
   const app = express();
   app.set("trust proxy", 1);
   app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
-  app.use(cors({ origin: config.clientOrigin.split(","), credentials: true }));
+  const allowedOrigins = [...config.clientOrigin.split(","), ...config.mobileClientOrigins.split(",")].map(origin => origin.trim()).filter(Boolean);
+  app.use(cors({ origin: allowedOrigins, credentials: true }));
   app.use(compression());
   app.use(cookieParser());
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true }));
   if (config.nodeEnv !== "test") app.use(morgan("combined"));
   const authenticationLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true });
+  const aiChatLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
   app.use(["/api/auth/login", "/api/auth/register", "/api/auth/otp/request", "/api/auth/otp/verify"], authenticationLimiter);
-  app.use("/api", optionalAuth, configRoutes, userRoutes, otpCodeRoutes, channelEventRoutes, dataSubjectRequestRoutes, paymentRoutes, pushSubscriptionRoutes, reportRoutes, notificationRoutes, communityPostRoutes, emergencyRoutes, agencyRoutes, auditLogRoutes, migrationRoutes);
+  app.use("/api/ai/chat", aiChatLimiter);
+  app.use("/api", optionalAuth, configRoutes, userRoutes, otpCodeRoutes, channelEventRoutes, dataSubjectRequestRoutes, paymentRoutes, pushSubscriptionRoutes, aiChatRoutes, reportRoutes, notificationRoutes, communityPostRoutes, emergencyRoutes, agencyRoutes, auditLogRoutes, migrationRoutes);
   if (config.nodeEnv === "production") {
     const dist = path.resolve("dist");
     app.use(express.static(dist, { maxAge: "1y", index: false }));

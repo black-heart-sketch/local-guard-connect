@@ -9,7 +9,11 @@ lerna-debug.log*
 
 node_modules
 uploads/
-.env.local
+# Local environment files can contain API keys and must never be committed.
+.env
+.env.*
+!.env.example
+!.env.mobile.example
 dist
 dist-ssr
 *.local

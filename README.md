@@ -8,6 +8,7 @@ CrimeX is a bilingual, mobile-first community safety platform for Cameroon. Citi
 - Express 5 REST API
 - MongoDB with Mongoose schemas and versioned migrations
 - DigiPay SDK for optional MTN/Orange Mobile Money contributions and organization subscriptions
+- OpenRouter-backed bilingual safety assistant with the API key kept on the server
 - JWT authentication in HTTP-only cookies with bearer-token support
 - Private filesystem evidence storage (replace with an encrypted object store in multi-instance production)
 
@@ -25,7 +26,7 @@ npm run db:seed
 npm run dev
 ```
 
-The web app runs on `http://localhost:3000`; Vite proxies `/api` to the Express API on `http://localhost:4000`.
+The web app runs on `http://localhost:3001`; Vite proxies `/api` to the Express API on `http://localhost:4000`. The dedicated port avoids browser module-cache collisions with other local Vite projects. Override it with `VITE_DEV_PORT` if needed.
 
 ## Commands
 
@@ -36,9 +37,32 @@ npm run server:dev   # API only
 npm run db:migrate   # apply pending MongoDB migrations
 npm run db:seed      # idempotent Cameroon demo users, agencies and cases
 npm run build        # production web build
+npm run build:web    # explicit production web build
+npm run build:mobile # mobile web build + sync Android and iOS
+npm run mobile:android # build and run the Android application
+npm run mobile:ios     # build and run the iOS application
+npm run mobile:open:android # open the native Android project
+npm run mobile:open:ios     # open the native iOS project
 npm run test:api     # API tests
 npm run data:retention # purge expired records not under legal hold
 ```
+
+## Web and Capacitor mobile applications
+
+The React application is shared by all targets. The normal website is built with `npm run build:web`. Capacitor packages the same interface as native Android and iOS applications with application ID `cm.crimex.app`.
+
+The mobile build reads `.env.mobile`. `VITE_API_URL` must be an absolute HTTPS API URL because a packaged WebView cannot use Vite's `/api` development proxy. The API must allow the Capacitor origins configured by `MOBILE_CLIENT_ORIGINS`.
+
+```bash
+# Synchronize the latest React build into both native projects
+npm run build:mobile
+
+# Run on a connected device or installed emulator/simulator
+npm run mobile:android
+npm run mobile:ios
+```
+
+Android requires Android Studio/JDK and iOS requires macOS/Xcode. Camera, microphone and location permission descriptions are already included in the generated native projects. Change the production API in `.env.mobile` before publishing if the backend domain changes.
 
 The login page includes quick-access buttons for the seeded citizen, dispatcher, police and administrator accounts. Their default password is `Cameroon@2026`. Change `SEED_PASSWORD` when creating a custom demo dataset; hide the quick-access panel with `VITE_ENABLE_QUICK_LOGIN=false`. Seeding is blocked in production unless `ALLOW_PRODUCTION_SEED=true` is deliberately configured.
 
@@ -58,6 +82,10 @@ Each persisted domain has a dedicated model, controller, and route module. For e
 - Optional DigiPay Mobile Money support; incident and emergency reporting never requires payment
 
 Set `DIGIPAY_API_KEY=dpk_...` and `DIGIPAY_ENVIRONMENT=production` for live payments. Without a key, non-production environments return an explicit simulation response. DigiPay balance and payout endpoints are admin-only.
+
+To enable the global AI safety chat, create an OpenRouter key and set `OPENROUTER_API_KEY`. The backend uses `OPENROUTER_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free` by default. Set `OPENROUTER_SITE_URL` to the public CrimeX URL. The key must never use the `VITE_` prefix because it must remain server-side.
+
+The AI receives a fresh server-generated application context on every message. Guests see only public records; citizens see their own reports, emergencies, payments, privacy requests and notifications; operational users see only data allowed by their role, assignment and jurisdiction; dispatcher/admin summaries are separately gated. Client-supplied roles are never trusted, and secrets, evidence paths, recovery hashes, payment transaction identifiers and unnecessary contact details are excluded before the OpenRouter request is created.
 
 To enable browser alerts, generate VAPID keys and set `VAPID_SUBJECT`, `VAPID_PUBLIC_KEY`, and `VAPID_PRIVATE_KEY`. Push subscriptions are stored per authenticated user and expired browser endpoints are removed automatically.
 

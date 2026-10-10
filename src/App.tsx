@@ -16,12 +16,17 @@ import PartnersPage from "./pages/PartnersPage";
 import SupportPage from "./pages/SupportPage";
 import TrackReportPage from "./pages/TrackReportPage";
 import { AuthProvider } from "./hooks/useAuth";
+import GlobalAiChat from "./components/ai/GlobalAiChat";
 
 const queryClient = new QueryClient();
 
-const ContextualEmergencyButton = () => {
+const GlobalSafetyActions = () => {
   const { pathname } = useLocation();
-  return pathname === "/" || pathname === "/dashboard" ? <EmergencyButton /> : null;
+  const showEmergency = pathname === "/" || pathname === "/dashboard";
+  return <>
+    <GlobalAiChat besideEmergency={showEmergency} />
+    {showEmergency && <EmergencyButton />}
+  </>;
 };
 
 const App = () => (
@@ -45,7 +50,7 @@ const App = () => (
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
-        <ContextualEmergencyButton />
+        <GlobalSafetyActions />
       </BrowserRouter>
     </TooltipProvider>
     </LanguageProvider>

@@ -10,6 +10,10 @@ import { operationalRoles } from "../middleware/auth.js";
 import { audit, coordinatesFrom, hash, recoveryCode, reference, serializeLocation } from "../lib/utils.js";
 import { sendSms } from "../services/smsService.js";
 
+function recordingExtension(mimeType = "") {
+  return String(mimeType).toLowerCase().includes("mp4") ? "mp4" : "webm";
+}
+
 export async function createEmergency(req, res, next) {
   try {
     const sessionId = req.body.recordingSessionId || crypto.randomUUID();
@@ -37,14 +41,15 @@ export async function streamRecording(req, res, next) {
     if (!owner && !recovered) return res.status(403).json({ error: "Emergency recovery code required" });
     if (emergency.recording?.storedName) return res.status(409).json({ error: "A recording already exists for this emergency" });
 
-    const storedName = `${crypto.randomUUID()}.webm`;
+    const mimeType = req.headers["content-type"] || "video/webm";
+    const storedName = `${crypto.randomUUID()}.${recordingExtension(mimeType)}`;
     const finalPath = path.resolve(config.uploadDir, "emergency", storedName);
     temporaryPath = `${finalPath}.part`;
     const output = fs.createWriteStream(temporaryPath, { flags: "wx" });
     const maximumBytes = Number(process.env.MAX_EMERGENCY_STREAM_BYTES || 250 * 1024 * 1024);
     let size = 0;
     let rejected = false;
-    emergency.recording = { storedName, mimeType: req.headers["content-type"] || "video/webm", size: 0, startedAt: new Date() };
+    emergency.recording = { storedName, mimeType, size: 0, startedAt: new Date() };
     await emergency.save();
 
     req.on("data", data => {
@@ -132,12 +137,13 @@ export function handleEmergencyStreamSocket(socket, sessionId) {
         if (!owner && !recovered) return void fail("Emergency recovery code required");
         if (emergency.recording?.storedName) return void fail("A recording already exists for this emergency", 1008);
 
-        const storedName = `${crypto.randomUUID()}.webm`;
+        const mimeType = input.mimeType || "video/webm";
+        const storedName = `${crypto.randomUUID()}.${recordingExtension(mimeType)}`;
         finalPath = path.resolve(config.uploadDir, "emergency", storedName);
         temporaryPath = `${finalPath}.part`;
         output = fs.createWriteStream(temporaryPath, { flags: "wx" });
         output.on("error", error => void fail(error.message, 1011));
-        emergency.recording = { storedName, mimeType: input.mimeType || "video/webm", size: 0, startedAt: new Date() };
+        emergency.recording = { storedName, mimeType, size: 0, startedAt: new Date() };
         await emergency.save();
         ready = true;
         send({ type: "ready", sessionId });

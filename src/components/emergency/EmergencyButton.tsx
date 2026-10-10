@@ -31,6 +31,7 @@ const EmergencyButton = () => {
   const finalizingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const localSegmentsRef = useRef<Blob[]>([]);
+  const recordingMimeTypeRef = useRef('video/webm');
 
   const stopTracks = () => {
     const active = mediaStreamRef.current;
@@ -95,18 +96,25 @@ const EmergencyButton = () => {
       mediaStreamRef.current = stream;
       setMediaStream(stream);
 
+      const supportedMimeType = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4;codecs=h264,aac',
+        'video/mp4',
+      ].find(type => MediaRecorder.isTypeSupported(type));
+      const recorder = supportedMimeType
+        ? new MediaRecorder(stream, { mimeType: supportedMimeType, videoBitsPerSecond: 1_000_000 })
+        : new MediaRecorder(stream, { videoBitsPerSecond: 1_000_000 });
+      recordingMimeTypeRef.current = recorder.mimeType || supportedMimeType || 'video/webm';
+
       const nextSessionId = `emergency_${Date.now()}_${crypto.randomUUID()}`;
-      const upload = await createEmergencyRecordingStream({ recordingSessionId: nextSessionId, type: 'panic_button', location });
+      const upload = await createEmergencyRecordingStream({ recordingSessionId: nextSessionId, type: 'panic_button', mimeType: recordingMimeTypeRef.current, location });
       uploadRef.current = upload;
       setSessionId(nextSessionId);
       setTransferStatus('Encrypted transport open — streaming to private storage');
       writeChainRef.current = Promise.resolve();
 
-      const preferredType = 'video/webm;codecs=vp9,opus';
-      const recorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported(preferredType) ? preferredType : 'video/webm',
-        videoBitsPerSecond: 1_000_000,
-      });
       recorderRef.current = recorder;
       recorder.ondataavailable = event => {
         if (!event.data.size || !uploadRef.current) return;
@@ -151,9 +159,11 @@ const EmergencyButton = () => {
 
   const downloadLocalCopy = () => {
     if (!localSegmentsRef.current.length) return;
-    const url = URL.createObjectURL(new Blob(localSegmentsRef.current, { type: 'video/webm' }));
+    const mimeType = recordingMimeTypeRef.current;
+    const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+    const url = URL.createObjectURL(new Blob(localSegmentsRef.current, { type: mimeType }));
     const anchor = document.createElement('a');
-    anchor.href = url; anchor.download = `emergency-recording-${Date.now()}.webm`; anchor.click();
+    anchor.href = url; anchor.download = `emergency-recording-${Date.now()}.${extension}`; anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
@@ -165,7 +175,11 @@ const EmergencyButton = () => {
     void uploadRef.current?.writer.abort('Component closed');
   }, []);
 
-  return <div className="fixed bottom-6 right-6 z-50" data-testid="emergency-recorder">
+  return <div
+    className="fixed z-50"
+    style={{ bottom: 'calc(1.5rem + env(safe-area-inset-bottom))', right: 'calc(1.5rem + env(safe-area-inset-right))' }}
+    data-testid="emergency-recorder"
+  >
     {error && <div className="absolute bottom-24 right-0 flex w-80 gap-3 rounded-lg border-l-4 border-red-500 bg-red-50 p-4 text-red-700 shadow-xl"><AlertCircle className="h-5 w-5 shrink-0" /><div><p className="font-medium">Recording problem</p><p className="text-xs">{error}</p></div></div>}
 
     {(recording || stopping) && <div className="absolute bottom-24 right-0 w-80 rounded-xl border-l-4 border-red-500 bg-white p-4 shadow-xl">

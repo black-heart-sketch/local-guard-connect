@@ -6,6 +6,7 @@ import path from "path";
 export default defineConfig(({ command, mode }) => {
   // Load env variables
   const env = loadEnv(mode, process.cwd(), '');
+  const webPort = Number(env.VITE_DEV_PORT || 3001);
   
   // Log environment and command info
   console.log('Vite Config - Command:', command);
@@ -17,7 +18,7 @@ export default defineConfig(({ command, mode }) => {
     'localhost',
     '127.0.0.1',
     'local-guard-connect.onrender.com',
-    'localhost:3000',
+    'localhost:3001',
     'localhost:8080'
   ];
   
@@ -32,6 +33,11 @@ export default defineConfig(({ command, mode }) => {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
+      // Ensure hooks and the renderer always resolve to the same React runtime.
+      dedupe: ['react', 'react-dom'],
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
     },
     define: {
       'process.env': {},
@@ -39,7 +45,7 @@ export default defineConfig(({ command, mode }) => {
     },
     server: {
       host: true,
-      port: 3000,
+      port: webPort,
       strictPort: true,
       ...(env.VITE_HMR_CLIENT_PORT ? { hmr: { clientPort: Number(env.VITE_HMR_CLIENT_PORT) } } : {}),
       cors: true,
@@ -60,7 +66,7 @@ export default defineConfig(({ command, mode }) => {
     },
     preview: {
       host: true,
-      port: 3000,
+      port: webPort,
       strictPort: true,
       cors: true,
       headers: {
